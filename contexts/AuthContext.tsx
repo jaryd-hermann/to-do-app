@@ -2,8 +2,8 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as AppleAuthentication from 'expo-apple-authentication';
 import { Platform } from 'react-native';
+import { getAppleAuthentication } from '@/lib/appleAuth';
 
 type SubscriptionStatus = 'trial' | 'active' | 'expired';
 
@@ -30,52 +30,126 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus>('expired');
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        checkSubscriptionStatus(session.user);
-      } else {
+    let subscription: { unsubscribe: () => void } | null = null;
+    let timeoutId: NodeJS.Timeout | null = null;
+
+    // Wrap initialization in try-catch to prevent crashes
+    try {
+      // Set a timeout to ensure loading doesn't hang forever
+      timeoutId = setTimeout(() => {
+        console.warn('Auth initialization timeout - setting loading to false');
+        setLoading(false);
+      }, 5000); // 5 second timeout
+
+      // Get initial session
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        try {
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
+          }
+          setSession(session);
+          setUser(session?.user ?? null);
+          if (session?.user) {
+            checkSubscriptionStatus(session.user);
+          } else {
+            setLoading(false);
+          }
+        } catch (error) {
+          console.error('Error setting session:', error);
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
+          }
+          setLoading(false);
+        }
+      }).catch((error) => {
+        console.error('Error getting session:', error);
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+        setLoading(false);
+      });
+
+      // Listen for auth changes
+      try {
+        const {
+          data: { subscription: authSubscription },
+        } = supabase.auth.onAuthStateChange((event, session) => {
+          try {
+            console.log('Auth state changed:', event, 'User:', session?.user?.id || 'none');
+            setSession(session);
+            setUser(session?.user ?? null);
+            if (session?.user) {
+              console.log('Auth state change: User logged in, checking subscription...');
+              checkSubscriptionStatus(session.user);
+            } else {
+              console.log('Auth state change: No user, setting expired');
+              setSubscriptionStatus('expired');
+              setLoading(false);
+            }
+          } catch (error) {
+            console.error('Error in auth state change:', error);
+            setLoading(false);
+          }
+        });
+        subscription = authSubscription;
+      } catch (error) {
+        console.error('Error setting up auth listener:', error);
         setLoading(false);
       }
-    });
+    } catch (error) {
+      console.error('Error initializing auth:', error);
+      setLoading(false);
+    }
 
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        checkSubscriptionStatus(session.user);
-      } else {
-        setSubscriptionStatus('expired');
-        setLoading(false);
+    return () => {
+      try {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+        if (subscription) {
+          subscription.unsubscribe();
+        }
+      } catch (error) {
+        console.error('Error cleaning up auth:', error);
       }
-    });
-
-    return () => subscription.unsubscribe();
+    };
   }, []);
 
   const checkSubscriptionStatus = async (userToCheck?: User) => {
     const userToUse = userToCheck || user;
     if (!userToUse) {
+      console.log('checkSubscriptionStatus: No user provided');
       setSubscriptionStatus('expired');
       setLoading(false);
       return;
     }
 
+    console.log('checkSubscriptionStatus: Checking subscription for user:', userToUse.id);
+    
+    // Add timeout to prevent hanging
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => {
+        reject(new Error('Subscription check timed out after 10 seconds'));
+      }, 10000); // 10 second timeout
+    });
+
     try {
-      const { data, error } = await supabase
+      const queryPromise = supabase
         .from('users')
         .select('subscription_status, trial_started_at')
         .eq('id', userToUse.id)
         .single();
 
+      const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
+
       if (error) {
         // If user doesn't exist yet, they haven't started trial - default to expired
         if (error.code === 'PGRST116') {
+          console.log('checkSubscriptionStatus: User record not found, defaulting to expired');
           setSubscriptionStatus('expired');
           setLoading(false);
           return;
@@ -85,6 +159,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (data) {
         const status = data.subscription_status as SubscriptionStatus;
+        console.log('checkSubscriptionStatus: Found subscription status:', status);
         
         // Check if trial expired
         if (status === 'trial' && data.trial_started_at) {
@@ -102,6 +177,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } else {
         // No subscription data - user hasn't started trial
+        console.log('checkSubscriptionStatus: No subscription data, defaulting to expired');
         setSubscriptionStatus('expired');
       }
     } catch (error) {
@@ -109,27 +185,75 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // On error, default to expired to be safe
       setSubscriptionStatus('expired');
     } finally {
+      console.log('checkSubscriptionStatus: Setting loading to false');
       setLoading(false);
     }
   };
 
   const signIn = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    if (error) throw error;
-    if (data.user) {
-      // Check if user already exists - if not, create record (but don't auto-set trial status)
-      const { data: existingUser } = await supabase
-        .from('users')
-        .select('id')
-        .eq('id', data.user.id)
-        .single();
+    try {
+      // Log Supabase client status for debugging (both dev and prod)
+      console.log('Attempting sign in...');
+      console.log('Supabase client:', supabase ? 'exists' : 'null');
+      console.log('Supabase auth:', supabase?.auth ? 'exists' : 'null');
       
-      if (!existingUser) {
-        await ensureUserRecord(data.user.id, false, email);
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('Sign in request timed out after 30 seconds. Please check your internet connection and try again.'));
+        }, 30000); // 30 second timeout
+      });
+
+      console.log('Calling supabase.auth.signInWithPassword...');
+      const signInPromise = supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      const { data, error } = await Promise.race([signInPromise, timeoutPromise]);
+      
+      console.log('Sign in response received:', { hasData: !!data, hasError: !!error });
+      
+      if (error) {
+        console.error('Sign in error details:', {
+          message: error.message,
+          status: error.status,
+          name: error.name,
+          code: (error as any).code,
+          error: JSON.stringify(error, null, 2),
+        });
+        // Provide more helpful error messages
+        if (error.message?.includes('network') || error.message?.includes('fetch') || error.message?.includes('Network request failed') || error.message?.includes('Failed to fetch')) {
+          const detailedError = `Network request failed. ${error.status ? `Status: ${error.status}. ` : ''}Please check your internet connection and try again.`;
+          throw new Error(detailedError);
+        }
+        throw error;
       }
+      
+      console.log('Sign in successful, user:', data.user?.id);
+      if (data.user) {
+        // Check if user already exists - if not, create record (but don't auto-set trial status)
+        try {
+          const { data: existingUser } = await supabase
+            .from('users')
+            .select('id')
+            .eq('id', data.user.id)
+            .single();
+          
+          if (!existingUser) {
+            await ensureUserRecord(data.user.id, false, email);
+          }
+        } catch (dbError: any) {
+          // Don't fail sign-in if user record creation fails
+          console.error('Error checking/creating user record:', dbError);
+        }
+      }
+    } catch (error: any) {
+      // Re-throw with better error message if it's a network error
+      if (error.message?.includes('network') || error.message?.includes('fetch') || error.message?.includes('Network request failed')) {
+        throw new Error('Network request failed. Please check your internet connection and try again.');
+      }
+      throw error;
     }
   };
 
@@ -155,6 +279,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
+      // Lazy load to avoid crash on app launch if module isn't available
+      const AppleAuthentication = getAppleAuthentication();
+      
+      if (!AppleAuthentication) {
+        throw new Error('Apple Sign-In is not available on this device. Please rebuild the app with the expo-apple-authentication plugin.');
+      }
+      
       // Request Apple authentication
       const credential = await AppleAuthentication.signInAsync({
         requestedScopes: [

@@ -51,10 +51,27 @@ export default function ScribbleEditorScreen() {
       } else {
         // New daily scribble - set default title
         // Parse dateParam as YYYY-MM-DD format (local date, not UTC)
-        const [year, month, day] = dateParam.split('-').map(Number);
-        const date = new Date(year, month - 1, day); // month is 0-indexed
-        const defaultTitle = format(date, 'EEEE, MMMM d');
-        setTitle(defaultTitle);
+        if (dateParam && typeof dateParam === 'string' && dateParam.includes('-')) {
+          try {
+            const parts = dateParam.split('-');
+            if (parts.length === 3) {
+              const [year, month, day] = parts.map(Number);
+              if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+                const date = new Date(year, month - 1, day); // month is 0-indexed
+                if (!isNaN(date.getTime())) {
+                  const defaultTitle = format(date, 'EEEE, MMMM d');
+                  setTitle(defaultTitle);
+                  setLastSaved(null);
+                  return;
+                }
+              }
+            }
+          } catch (error) {
+            console.error('Error parsing dateParam:', error);
+          }
+        }
+        // Fallback if parsing fails
+        setTitle(format(new Date(), 'EEEE, MMMM d'));
         setLastSaved(null);
       }
     } else {
@@ -75,11 +92,23 @@ export default function ScribbleEditorScreen() {
 
     setIsSaving(true);
     try {
-      const titleToSave = title.trim() || (dateParam ? (() => {
-        // Parse dateParam as YYYY-MM-DD format (local date, not UTC)
-        const [year, month, day] = dateParam.split('-').map(Number);
-        const date = new Date(year, month - 1, day);
-        return format(date, 'EEEE, MMMM d');
+      const titleToSave = title.trim() || (dateParam && typeof dateParam === 'string' && dateParam.includes('-') ? (() => {
+        try {
+          // Parse dateParam as YYYY-MM-DD format (local date, not UTC)
+          const parts = dateParam.split('-');
+          if (parts.length === 3) {
+            const [year, month, day] = parts.map(Number);
+            if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+              const date = new Date(year, month - 1, day);
+              if (!isNaN(date.getTime())) {
+                return format(date, 'EEEE, MMMM d');
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error parsing dateParam in handleSave:', error);
+        }
+        return format(new Date(), 'EEEE, MMMM d');
       })() : 'Untitled');
       
       if (scribbleId) {

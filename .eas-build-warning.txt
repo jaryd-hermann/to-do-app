@@ -1,0 +1,13 @@
+⚠️  IMPORTANT: Don't run 'eas build' directly!
+
+Always use one of these commands instead:
+  npm run build:ios          # For iOS production builds
+  npm run build:android       # For Android production builds  
+  npm run eas:build -- [args] # For custom builds
+
+These commands automatically:
+  1. Increment the build number
+  2. Commit the changes to git
+  3. Run the EAS build
+
+If you run 'eas build' directly, the build number won't increment!

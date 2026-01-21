@@ -10,8 +10,11 @@
     "web": "expo start --web",
     "postinstall": "node scripts/fix-react-devtools.js || true",
     "increment-build": "node scripts/increment-build.js",
-    "build:ios": "npm run increment-build && eas build --platform ios --profile production",
-    "build:android": "npm run increment-build && eas build --platform android --profile production"
+    "check-build": "node scripts/check-build-number.js",
+    "build:ios": "node scripts/eas-build-with-increment.js --platform ios --profile production",
+    "build:android": "node scripts/eas-build-with-increment.js --platform android --profile production",
+    "eas:build": "node scripts/eas-build-with-increment.js",
+    "prebuild": "node scripts/check-build-number.js"
   },
   "keywords": [],
   "author": "",

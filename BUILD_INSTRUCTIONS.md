@@ -71,16 +71,53 @@ npm start -- --dev-client
 
 ## Building for Production
 
+### Auto-Incrementing Build Numbers
+
+**IMPORTANT:** Build numbers are automatically incremented and committed before each build. 
+
+**Always use one of these methods (never run `eas build` directly):**
+
+**Option 1: Use npm scripts (Recommended)**
+```bash
+npm run build:ios      # iOS production build (auto-increments & commits)
+npm run build:android  # Android production build (auto-increments & commits)
+```
+
+**Option 2: Use the wrapper script directly**
+```bash
+npm run eas:build -- --platform ios --profile production
+npm run eas:build -- --platform android --profile production
+npm run eas:build -- --platform ios --profile development  # For dev builds
+```
+
+**Option 3: Manual increment (if you need more control)**
+```bash
+npm run increment-build
+git add app.json ios/Mindjoy/Info.plist ios/Mindjoy.xcodeproj/project.pbxproj
+git commit -m "chore: increment build number"
+eas build --platform ios --profile production
+```
+
+**Note:** The wrapper script automatically commits build number changes to git. If you don't want auto-commit, use `--no-commit` flag:
+```bash
+npm run eas:build -- --platform ios --profile production --no-commit
+```
+
 ### iOS App Store
 ```bash
-eas build --profile production --platform ios
+npm run build:ios
 eas submit --platform ios
 ```
 
 ### Android Play Store
 ```bash
-eas build --profile production --platform android
+npm run build:android
 eas submit --platform android
+```
+
+### Development Builds
+```bash
+npm run eas:build -- --platform ios --profile development
 ```
 
 ## Troubleshooting

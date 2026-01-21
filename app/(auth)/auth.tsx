@@ -3,7 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, Alert, Image, Platform } from 
 import { Link, router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import * as AppleAuthentication from 'expo-apple-authentication';
+import { isAppleAuthAvailable, getAppleAuthentication } from '@/lib/appleAuth';
 
 export default function AuthScreen() {
   const [email, setEmail] = useState('');
@@ -12,14 +12,26 @@ export default function AuthScreen() {
   const [loading, setLoading] = useState(false);
   const [appleLoading, setAppleLoading] = useState(false);
   const [isAppleAvailable, setIsAppleAvailable] = useState(false);
-  const { signIn, signUp, signInWithApple } = useAuth();
+  const { signIn, signUp, signInWithApple, user, subscriptionStatus, loading: authLoading } = useAuth();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+
+  // Navigate when user signs in successfully
+  useEffect(() => {
+    if (!authLoading && user) {
+      console.log('Auth screen: User detected, navigating...', { subscriptionStatus });
+      if (subscriptionStatus === 'expired') {
+        router.replace('/(auth)/paywall');
+      } else {
+        router.replace('/(tabs)/today');
+      }
+    }
+  }, [user, subscriptionStatus, authLoading]);
 
   useEffect(() => {
     // Check if Apple Sign-In is available
     if (Platform.OS === 'ios') {
-      AppleAuthentication.isAvailableAsync().then((available) => {
+      isAppleAuthAvailable().then((available) => {
         console.log('Apple Sign-In available:', available);
         setIsAppleAvailable(available);
         if (!available) {
@@ -46,12 +58,12 @@ export default function AuthScreen() {
         router.replace('/(auth)/about');
       } else {
         await signIn(email, password);
-        // Existing users - let app/index.tsx handle routing based on subscription status
-        // It will route to paywall if expired, or directly to today if active
+        // Navigation will be handled by useEffect watching user/subscriptionStatus
+        // Wait a moment for auth state to update
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Authentication failed');
-    } finally {
       setLoading(false);
     }
   };
@@ -75,10 +87,10 @@ export default function AuthScreen() {
     setAppleLoading(true);
     try {
       await signInWithApple();
-      console.log('Apple Sign-In successful, navigating...');
-      // Let app/index.tsx handle routing based on subscription status
-      // It will route to paywall if expired, or directly to today if active
-      // New users will be routed to about screen by app/index.tsx if needed
+      console.log('Apple Sign-In successful, waiting for auth state update...');
+      // Navigation will be handled by useEffect watching user/subscriptionStatus
+      // Wait a moment for auth state to update
+      await new Promise(resolve => setTimeout(resolve, 500));
     } catch (error: any) {
       console.error('Apple Sign-In Error Details:', {
         message: error.message,
@@ -174,18 +186,26 @@ export default function AuthScreen() {
 
           {/* Apple Sign In Button */}
           <View style={{ borderRadius: 25, overflow: 'hidden', width: '100%' }}>
-            <AppleAuthentication.AppleAuthenticationButton
-              buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
-              buttonStyle={
-                isDark
-                  ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
-                  : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
+            {(() => {
+              const AppleAuthentication = getAppleAuthentication();
+              if (!AppleAuthentication) {
+                return null;
               }
-              cornerRadius={25}
-              style={{ width: '100%', height: 50 }}
-              onPress={handleAppleSignIn}
-              disabled={appleLoading || loading}
-            />
+              return (
+                <AppleAuthentication.AppleAuthenticationButton
+                  buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+                  buttonStyle={
+                    isDark
+                      ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
+                      : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
+                  }
+                  cornerRadius={25}
+                  style={{ width: '100%', height: 50 }}
+                  onPress={handleAppleSignIn}
+                  disabled={appleLoading || loading}
+                />
+              );
+            })()}
           </View>
         </>
       )}

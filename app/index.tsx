@@ -1,11 +1,30 @@
 import { Redirect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { View, Image, ActivityIndicator } from 'react-native';
+import { useEffect, useState } from 'react';
 
 export default function Index() {
+  // useAuth should never throw - AuthContext handles all errors internally
   const { user, subscriptionStatus, loading } = useAuth();
+  const [loadingTimeout, setLoadingTimeout] = useState(false);
 
-  if (loading) {
+  // Add a safety timeout - if loading takes more than 15 seconds, assume something is wrong
+  useEffect(() => {
+    if (loading) {
+      const timeout = setTimeout(() => {
+        console.warn('Loading timeout - forcing navigation');
+        setLoadingTimeout(true);
+      }, 15000); // 15 second timeout
+      return () => clearTimeout(timeout);
+    } else {
+      setLoadingTimeout(false);
+    }
+  }, [loading]);
+
+  // If we have a user but loading is stuck, proceed anyway
+  const shouldShowLoading = loading && !loadingTimeout && !user;
+
+  if (shouldShowLoading) {
     return (
       <View style={{ flex: 1, backgroundColor: '#000000', alignItems: 'center', justifyContent: 'center' }}>
         <Image

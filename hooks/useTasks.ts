@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Task } from '@/types/models';
@@ -7,7 +7,45 @@ export function useDailyTasks(date: Date) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
-  const dateStr = date.toISOString().split('T')[0];
+  
+  // Safely get date string with defensive checks
+  const dateStr = React.useMemo(() => {
+    try {
+      if (!date || !(date instanceof Date) || isNaN(date.getTime())) {
+        // Fallback to today if date is invalid
+        const today = new Date();
+        const iso = today.toISOString();
+        if (typeof iso === 'string' && iso.includes('T')) {
+          return iso.split('T')[0];
+        }
+        // Ultimate fallback
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
+      const isoString = date.toISOString();
+      if (typeof isoString === 'string' && isoString.includes('T')) {
+        const parts = isoString.split('T');
+        if (parts.length > 0 && typeof parts[0] === 'string') {
+          return parts[0];
+        }
+      }
+      // Fallback if split fails
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    } catch (error) {
+      console.error('Error getting date string:', error);
+      // Ultimate fallback
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      const day = String(today.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+  }, [date]);
 
   useEffect(() => {
     if (!user) return;
