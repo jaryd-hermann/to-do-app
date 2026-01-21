@@ -85,6 +85,16 @@ export default function AuthScreen() {
         console.log('User canceled Apple Sign-In');
         return;
       }
+      // Handle simulator-specific errors
+      if (error.code === 'ERR_REQUEST_UNKNOWN' || error.message?.includes('unknown reason')) {
+        Alert.alert(
+          'Apple Sign-In Unavailable',
+          'Apple Sign-In may not work in the iOS Simulator. Please test on a physical device, or sign in with email/password instead.',
+          [{ text: 'OK' }]
+        );
+        setAppleLoading(false);
+        return;
+      }
       // Show error with helpful message
       const errorMessage = error.message || 'Apple Sign-In failed';
       Alert.alert('Error', errorMessage);
