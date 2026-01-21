@@ -22,7 +22,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.jarydhermann.mindjoy",
-      "buildNumber": "9",
+      "buildNumber": "10",
       "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
@@ -34,7 +34,7 @@
         "backgroundColor": "#000000"
       },
       "package": "com.jarydhermann.mindjoy",
-      "versionCode": 9
+      "versionCode": 10
     },
     "web": {
       "favicon": "./assets/favicon.png"
