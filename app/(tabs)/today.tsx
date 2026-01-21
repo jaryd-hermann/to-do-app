@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, Alert, Dimensions } from 'react-native';
 import { router } from 'expo-router';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -14,24 +14,62 @@ import { Task } from '@/types/models';
 import { useTheme } from '@/contexts/ThemeContext';
 import { format, startOfWeek, addDays, isSameDay, isToday, isPast, isFuture } from 'date-fns';
 import { Ionicons } from '@expo/vector-icons';
+import { useDailyWisdom } from '@/hooks/useDailyWisdom';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const DAY_CARD_WIDTH = 50 + 8; // card width + margin
 
 export default function TodayScreen() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const dayScrollViewRef = useRef<ScrollView>(null);
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
-  const { tasks, loading, createTask, updateTask, deleteTask, reorderTasks, toggleComplete } =
+  const { tasks, loading, createTask, updateTask, deleteTask, reorderTasks, toggleComplete, refetch } =
     useDailyTasks(selectedDate);
   const { principles } = usePrinciples();
   const { activeGoals } = useGoals();
+  const { wisdom } = useDailyWisdom(selectedDate);
 
-  // Get current week (7 days)
-  const weekDays = useMemo(() => {
-    const start = startOfWeek(selectedDate, { weekStartsOn: 0 });
-    return Array.from({ length: 7 }, (_, i) => addDays(start, i));
-  }, [selectedDate]);
+  // Get 7 days back, current day, and 7 days forward (15 days total)
+  const dayNavigation = useMemo(() => {
+    const today = new Date();
+    const days: Date[] = [];
+    // 7 days back
+    for (let i = 7; i > 0; i--) {
+      days.push(addDays(today, -i));
+    }
+    // Current day
+    days.push(today);
+    // 7 days forward
+    for (let i = 1; i <= 7; i++) {
+      days.push(addDays(today, i));
+    }
+    return days;
+  }, []); // Recalculate when app loads or when needed
+
+  // Center the current day in the timeline on mount
+  useEffect(() => {
+    if (dayScrollViewRef.current && dayNavigation.length > 0) {
+      // Current day is at index 7 (7 days back + today)
+      const currentDayIndex = 7;
+      // Account for padding (px-6 = 24px on each side)
+      const padding = 24;
+      const visibleWidth = SCREEN_WIDTH - (padding * 2);
+      // Calculate scroll position to center the current day
+      const scrollPosition = (currentDayIndex * DAY_CARD_WIDTH) - (visibleWidth / 2) + (DAY_CARD_WIDTH / 2);
+      
+      // Small delay to ensure ScrollView is rendered
+      setTimeout(() => {
+        dayScrollViewRef.current?.scrollTo({
+          x: Math.max(0, scrollPosition),
+          animated: false,
+        });
+      }, 100);
+    }
+  }, []);
 
   const handleCreateTask = async (title: string, principleId: string, goalId?: string | null) => {
     await createTask(title, principleId, goalId);
@@ -46,7 +84,7 @@ export default function TodayScreen() {
       const currentTasks = [...tasks].sort((a, b) => a.position - b.position);
       const updatedTasks = currentTasks.map(t => {
         if (t.id === editingTask.id) {
-          return { ...t, position: 0 };
+          return { ...t, position: 0, title, principle_id: principleId, goal_id: goalId || null };
         } else if (t.position === 0) {
           // Current primary becomes position 1
           return { ...t, position: 1 };
@@ -57,10 +95,16 @@ export default function TodayScreen() {
         // Tasks after the promoted task stay the same
         return t;
       });
-      await reorderTasks(updatedTasks);
+      
+      // Update task fields first
       await updateTask(editingTask.id, { title, principle_id: principleId, goal_id: goalId });
+      // Then reorder (this will refetch tasks)
+      await reorderTasks(updatedTasks);
+      // Ensure UI is updated
+      await refetch();
     } else {
       await updateTask(editingTask.id, { title, principle_id: principleId, goal_id: goalId });
+      await refetch();
     }
     setEditingTask(null);
   };
@@ -148,13 +192,14 @@ export default function TodayScreen() {
 
       {/* Day Selector */}
       <ScrollView
+        ref={dayScrollViewRef}
         horizontal
         showsHorizontalScrollIndicator={false}
         className="px-6"
         contentContainerStyle={{ paddingRight: 16, paddingBottom: 4 }}
         style={{ maxHeight: 60 }}
       >
-        {weekDays.map((day) => {
+        {dayNavigation.map((day) => {
           const isSelected = isSameDay(day, selectedDate);
           const isTodayDate = isToday(day);
           const isPastDate = isPast(day) && !isTodayDate;
@@ -235,6 +280,15 @@ export default function TodayScreen() {
           contentContainerStyle={{ paddingTop: 16, paddingBottom: 20 }}
           showsVerticalScrollIndicator={false}
         >
+          {/* Daily Wisdom Placeholder */}
+          {wisdom && (
+            <View className="mb-6">
+              <Text className={`text-sm leading-5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`} style={{ fontStyle: 'italic' }}>
+                {wisdom.quote}
+              </Text>
+            </View>
+          )}
+
           <TouchableOpacity
             className={`flex-row items-center justify-center py-12 rounded-2xl mb-4 ${
               isDark ? '' : 'bg-gray-100'

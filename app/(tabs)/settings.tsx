@@ -252,19 +252,28 @@ export default function SettingsScreen() {
           <Text className={`text-xs font-semibold mb-3 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
             SUBSCRIPTION
           </Text>
-          <View className={`rounded-2xl p-4 ${isDark ? '' : 'bg-gray-100'}`} style={isDark ? { backgroundColor: '#18181B' } : undefined}>
-            <Text className={`text-sm mb-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-              Current Plan
-            </Text>
-            <Text className={`font-semibold mb-1 ${isDark ? 'text-white' : 'text-black'}`}>
-              {getSubscriptionText()}
-            </Text>
-            {subscriptionStatus === 'trial' && (
-              <Text className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                Trial ends in 7 days
-              </Text>
-            )}
-          </View>
+          <TouchableOpacity
+            className={`rounded-2xl p-4 ${isDark ? '' : 'bg-gray-100'}`}
+            style={isDark ? { backgroundColor: '#18181B' } : undefined}
+            onPress={() => router.push('/(auth)/paywall')}
+          >
+            <View className="flex-row items-center justify-between">
+              <View className="flex-1">
+                <Text className={`text-sm mb-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                  Current Plan
+                </Text>
+                <Text className={`font-semibold mb-1 ${isDark ? 'text-white' : 'text-black'}`}>
+                  {getSubscriptionText()}
+                </Text>
+                {subscriptionStatus === 'trial' && (
+                  <Text className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                    Trial ends in 7 days
+                  </Text>
+                )}
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={isDark ? '#9CA3AF' : '#6B7280'} />
+            </View>
+          </TouchableOpacity>
         </View>
 
         {/* Sign Out */}

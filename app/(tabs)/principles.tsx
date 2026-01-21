@@ -120,14 +120,14 @@ export default function PrinciplesScreen() {
     <View className={`flex-1 ${isDark ? 'bg-black' : 'bg-white'}`}>
       <ScrollView className="flex-1 px-6">
         {/* Header */}
-        <View className="pt-16 pb-4">
-          <Text className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-black'}`}>
+        <View className="pt-20 pb-4">
+          <Text className={`text-3xl font-bold mb-4 ${isDark ? 'text-white' : 'text-black'}`}>
             My Principles
           </Text>
         </View>
 
         {/* My Principles Section */}
-        <View className="flex-row items-center justify-between mb-4">
+        <View className="flex-row items-center justify-between mb-8">
           <TouchableOpacity
             className={`px-4 py-2 rounded-xl border ${isDark ? 'bg-white border-white' : 'bg-black border-black'}`}
             onPress={() => {

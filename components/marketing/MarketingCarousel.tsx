@@ -107,7 +107,15 @@ export function MarketingCarousel({ cards, hideSeen = false }: MarketingCarousel
               {/* Image */}
               <View className="w-full" style={{ height: 280 }}>
                 <Image
-                  source={require('../../assets/placeholder.jpg')}
+                  source={
+                    card.id === 'philosophy'
+                      ? require('../../assets/1.png')
+                      : card.id === 'tips'
+                      ? require('../../assets/2.png')
+                      : card.id === 'goals'
+                      ? require('../../assets/3.png')
+                      : require('../../assets/placeholder.jpg')
+                  }
                   className="w-full h-full"
                   resizeMode="cover"
                 />

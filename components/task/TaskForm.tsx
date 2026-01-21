@@ -72,6 +72,16 @@ export function TaskForm({
   return (
     <BottomSheet visible={visible} onClose={onClose} title={task ? 'Edit Task' : 'New Task'}>
       <ScrollView>
+        {/* Task Title - Moved to top */}
+        <TextInput
+          className={`py-4 px-4 rounded-2xl mb-4 ${isDark ? '' : 'bg-gray-100'}`}
+          style={isDark ? { backgroundColor: '#18181B', color: '#FFFFFF' } : { color: '#000000' }}
+          placeholder="today, I will.."
+          placeholderTextColor={isDark ? '#9CA3AF' : '#6B7280'}
+          value={title}
+          onChangeText={setTitle}
+        />
+
         {/* Principle Selector */}
         <TouchableOpacity
           className={`py-4 px-4 rounded-2xl mb-4 ${isDark ? '' : 'bg-gray-100'}`}
@@ -79,7 +89,7 @@ export function TaskForm({
           onPress={() => setShowPrinciplePicker(!showPrinciplePicker)}
         >
           <Text className={`text-sm mb-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-            Select principle
+            What principle does this align to
           </Text>
           <Text className={`${selectedPrinciple ? '' : 'text-gray-500'} ${isDark ? 'text-white' : 'text-black'}`}>
             {selectedPrinciple ? selectedPrinciple.title : 'Choose a principle'}
@@ -87,18 +97,18 @@ export function TaskForm({
         </TouchableOpacity>
 
         {showPrinciplePicker && (
-          <View className={`rounded-2xl mb-6 ${isDark ? '' : 'bg-gray-100'}`} style={isDark ? { backgroundColor: '#27272A', paddingBottom: 12 } : undefined}>
+          <View className={`rounded-2xl mb-6 ${isDark ? '' : 'bg-gray-100'}`} style={isDark ? { backgroundColor: '#000000', paddingBottom: 12, paddingHorizontal: 4 } : undefined}>
             {principles.map((principle, index) => (
               <TouchableOpacity
                 key={principle.id}
-                className={`py-3 px-4 ${index < principles.length - 1 ? `border-b ${isDark ? 'border-gray-700' : 'border-gray-200'}` : ''}`}
-                style={isDark ? { backgroundColor: '#27272A' } : undefined}
+                className={`py-2 px-3 mb-2 rounded-full ${index < principles.length - 1 ? '' : ''}`}
+                style={isDark ? { backgroundColor: '#27272A' } : { backgroundColor: '#E5E7EB' }}
                 onPress={() => {
                   setSelectedPrincipleId(principle.id);
                   setShowPrinciplePicker(false);
                 }}
               >
-                <Text className={isDark ? 'text-white' : 'text-black'}>
+                <Text className={isDark ? 'text-gray-300' : 'text-gray-700'}>
                   {principle.title}
                 </Text>
               </TouchableOpacity>
@@ -113,7 +123,7 @@ export function TaskForm({
           onPress={() => setShowGoalPicker(!showGoalPicker)}
         >
           <Text className={`text-sm mb-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-            Select goal (optional)
+            Does this move a goal forward?
           </Text>
           <Text className={`${selectedGoal ? '' : 'text-gray-500'} ${isDark ? 'text-white' : 'text-black'}`}>
             {selectedGoal ? selectedGoal.title : 'Choose a goal (optional)'}
@@ -121,44 +131,34 @@ export function TaskForm({
         </TouchableOpacity>
 
         {showGoalPicker && (
-          <View className={`rounded-2xl mb-6 ${isDark ? '' : 'bg-gray-100'}`} style={isDark ? { backgroundColor: '#27272A', paddingBottom: 12 } : undefined}>
+          <View className={`rounded-2xl mb-6 ${isDark ? '' : 'bg-gray-100'}`} style={isDark ? { backgroundColor: '#000000', paddingBottom: 12, paddingHorizontal: 4 } : undefined}>
             <TouchableOpacity
-              className={`py-3 px-4 border-b ${isDark ? 'border-gray-700' : 'border-gray-200'}`}
-              style={isDark ? { backgroundColor: '#27272A' } : undefined}
+              className={`py-2 px-3 mb-2 rounded-full`}
+              style={isDark ? { backgroundColor: '#27272A' } : { backgroundColor: '#E5E7EB' }}
               onPress={() => {
                 setSelectedGoalId(null);
                 setShowGoalPicker(false);
               }}
             >
-              <Text className={isDark ? 'text-gray-400' : 'text-gray-600'}>None</Text>
+              <Text className={isDark ? 'text-gray-300' : 'text-gray-700'}>None</Text>
             </TouchableOpacity>
             {goals.map((goal, index) => (
               <TouchableOpacity
                 key={goal.id}
-                className={`py-3 px-4 ${index < goals.length - 1 ? `border-b ${isDark ? 'border-gray-700' : 'border-gray-200'}` : ''}`}
-                style={isDark ? { backgroundColor: '#27272A' } : undefined}
+                className={`py-2 px-3 mb-2 rounded-full ${index < goals.length - 1 ? '' : ''}`}
+                style={isDark ? { backgroundColor: '#27272A' } : { backgroundColor: '#E5E7EB' }}
                 onPress={() => {
                   setSelectedGoalId(goal.id);
                   setShowGoalPicker(false);
                 }}
               >
-                <Text className={isDark ? 'text-white' : 'text-black'}>
+                <Text className={isDark ? 'text-gray-300' : 'text-gray-700'}>
                   {goal.title}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
         )}
-
-        {/* Task Title */}
-        <TextInput
-          className={`py-4 px-4 rounded-2xl mb-4 ${isDark ? '' : 'bg-gray-100'}`}
-          style={isDark ? { backgroundColor: '#18181B', color: '#FFFFFF' } : { color: '#000000' }}
-          placeholder="today, I will.."
-          placeholderTextColor={isDark ? '#9CA3AF' : '#6B7280'}
-          value={title}
-          onChangeText={setTitle}
-        />
 
         {/* Make Primary Option - Only show for editing non-primary tasks */}
         {task && task.position !== 0 && (

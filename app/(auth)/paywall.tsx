@@ -40,9 +40,8 @@ export default function PaywallScreen() {
       await InAppPurchases.connectAsync();
       
       // Get available products
-      const products = await InAppPurchases.getProductsAsync({
-        productIds: planType === 'monthly' ? ['mindjoy_monthly'] : ['mindjoy_annual'],
-      });
+      const productIds = planType === 'monthly' ? ['mindjoy_monthly'] : ['mindjoy_annual'];
+      const products = await InAppPurchases.getProductsAsync(productIds);
 
       if (products.results && products.results.length > 0) {
         const product = products.results[0];
@@ -57,11 +56,22 @@ export default function PaywallScreen() {
         router.replace('/(tabs)/today');
       } else {
         // For development/testing, simulate subscription
-        await updateSubscription('trial', new Date());
-        router.replace('/(tabs)/today');
+        if (isDevelopment) {
+          await updateSubscription('trial', new Date());
+          router.replace('/(tabs)/today');
+        } else {
+          Alert.alert('Error', 'Subscription products not available. Please try again later.');
+        }
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to start subscription');
+      console.error('Purchase error:', error);
+      // In development, allow fallback
+      if (isDevelopment) {
+        await updateSubscription('trial', new Date());
+        router.replace('/(tabs)/today');
+      } else {
+        Alert.alert('Error', error.message || 'Failed to start subscription');
+      }
     } finally {
       setLoading(false);
     }

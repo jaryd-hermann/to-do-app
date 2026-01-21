@@ -1,19 +1,29 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { useWeeklyProgress } from '@/hooks/useProgress';
+import { useAllTimeProgress } from '@/hooks/useAllTimeProgress';
 import { usePrinciples } from '@/hooks/usePrinciples';
 import { useHabitProgress } from '@/hooks/useHabitProgress';
+import { useAllTimeHabitProgress } from '@/hooks/useAllTimeHabitProgress';
 import { useTheme } from '@/contexts/ThemeContext';
 import { startOfWeek, addWeeks, subWeeks, format, addDays } from 'date-fns';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function ProgressScreen() {
   const [currentWeek, setCurrentWeek] = useState(startOfWeek(new Date(), { weekStartsOn: 0 }));
+  const [viewMode, setViewMode] = useState<'weekly' | 'alltime'>('weekly');
   const { theme } = useTheme();
   const isDark = theme === 'dark';
-  const { progress, loading } = useWeeklyProgress(currentWeek);
+  const { progress: weeklyProgress, loading: weeklyLoading } = useWeeklyProgress(currentWeek);
+  const { progress: allTimeProgress, loading: allTimeLoading } = useAllTimeProgress();
   const { principles } = usePrinciples();
-  const { progress: habitProgress, loading: habitLoading } = useHabitProgress(currentWeek);
+  const { progress: weeklyHabitProgress, loading: habitLoading } = useHabitProgress(currentWeek);
+  const { progress: allTimeHabitProgress, loading: allTimeHabitLoading } = useAllTimeHabitProgress();
+  
+  const habitProgress = viewMode === 'weekly' ? weeklyHabitProgress : allTimeHabitProgress;
+  
+  const progress = viewMode === 'weekly' ? weeklyProgress : allTimeProgress;
+  const loading = viewMode === 'weekly' ? weeklyLoading : allTimeLoading;
 
   const goToPreviousWeek = () => {
     setCurrentWeek(subWeeks(currentWeek, 1));
@@ -31,26 +41,42 @@ export default function ProgressScreen() {
     <View className={`flex-1 ${isDark ? 'bg-black' : 'bg-white'}`}>
       <ScrollView className="flex-1 px-6">
         {/* Header */}
-        <View className="pt-16 pb-4">
-          <Text className={`text-2xl font-bold mb-4 ${isDark ? 'text-white' : 'text-black'}`}>
-            Weekly Progress
-          </Text>
-          <View className="flex-row items-center justify-between">
-            <TouchableOpacity onPress={goToPreviousWeek}>
-              <Ionicons name="chevron-back" size={24} color={isDark ? '#FFFFFF' : '#000000'} />
+        <View className="pt-16 pb-6">
+          <View className="flex-row items-center mb-6">
+            <TouchableOpacity
+              onPress={() => setViewMode('weekly')}
+              className="mr-4"
+            >
+              <Text className={`text-2xl font-bold ${viewMode === 'weekly' ? (isDark ? 'text-white' : 'text-black') : (isDark ? 'text-gray-500' : 'text-gray-400')}`}>
+                Weekly Progress
+              </Text>
             </TouchableOpacity>
-            <View className="items-center">
-              <Text className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                This Week
+            <TouchableOpacity
+              onPress={() => setViewMode('alltime')}
+            >
+              <Text className={`text-2xl font-bold ${viewMode === 'alltime' ? (isDark ? 'text-white' : 'text-black') : (isDark ? 'text-gray-500' : 'text-gray-400')}`}>
+                All Progress
               </Text>
-              <Text className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-black'}`}>
-                {weekStartStr} - {weekEndStr}
-              </Text>
-            </View>
-            <TouchableOpacity onPress={goToNextWeek}>
-              <Ionicons name="chevron-forward" size={24} color={isDark ? '#FFFFFF' : '#000000'} />
             </TouchableOpacity>
           </View>
+          {viewMode === 'weekly' && (
+            <View className="flex-row items-center justify-between">
+              <TouchableOpacity onPress={goToPreviousWeek}>
+                <Ionicons name="chevron-back" size={24} color={isDark ? '#FFFFFF' : '#000000'} />
+              </TouchableOpacity>
+              <View className="items-center">
+                <Text className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                  This Week
+                </Text>
+                <Text className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-black'}`}>
+                  {weekStartStr} - {weekEndStr}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={goToNextWeek}>
+                <Ionicons name="chevron-forward" size={24} color={isDark ? '#FFFFFF' : '#000000'} />
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         {/* Completion Rate */}
@@ -217,17 +243,18 @@ export default function ProgressScreen() {
           )}
         </View>
 
-        {/* Daily Activity */}
-        <View className={`rounded-2xl p-6 mb-4 ${isDark ? '' : 'bg-gray-100'}`} style={isDark ? { backgroundColor: '#000000', borderWidth: 1, borderColor: '#27272A' } : undefined}>
-          <Text className={`text-sm font-semibold mb-4 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-            Daily Activity
-          </Text>
-          <View className="flex-row justify-around">
-            {Array.from({ length: 7 }, (_, i) => {
-              const dayDate = addDays(currentWeek, i);
-              const dayStr = format(dayDate, 'yyyy-MM-dd');
-              const isCompleted = progress.dailyCompletion[dayStr];
-              const dayName = format(dayDate, 'EEE');
+        {/* Daily Activity - Only show for weekly view */}
+        {viewMode === 'weekly' && 'dailyCompletion' in progress && (
+          <View className={`rounded-2xl p-6 mb-4 ${isDark ? '' : 'bg-gray-100'}`} style={isDark ? { backgroundColor: '#000000', borderWidth: 1, borderColor: '#27272A' } : undefined}>
+            <Text className={`text-sm font-semibold mb-4 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+              Daily Activity
+            </Text>
+            <View className="flex-row justify-around">
+              {Array.from({ length: 7 }, (_, i) => {
+                const dayDate = addDays(currentWeek, i);
+                const dayStr = format(dayDate, 'yyyy-MM-dd');
+                const isCompleted = progress.dailyCompletion?.[dayStr];
+                const dayName = format(dayDate, 'EEE');
 
               return (
                 <View key={dayStr} className="items-center">
@@ -264,6 +291,7 @@ export default function ProgressScreen() {
             })}
           </View>
         </View>
+        )}
 
         {/* Habit Progress */}
         {habitProgress.length > 0 && (
