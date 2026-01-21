@@ -66,6 +66,7 @@ export function TaskCard({
             className={`text-lg mb-2 ${task.is_completed ? 'line-through' : ''} ${
               isDark ? 'text-white' : 'text-black'
             }`}
+            style={{ opacity: task.is_completed ? 0.5 : 1 }}
           >
             {task.title}
           </Text>

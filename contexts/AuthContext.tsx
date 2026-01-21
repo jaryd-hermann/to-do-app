@@ -120,8 +120,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     if (error) throw error;
     if (data.user) {
-      // Ensure user record exists (but don't auto-set trial status)
-      await ensureUserRecord(data.user.id, false);
+      // Check if user already exists - if not, create record (but don't auto-set trial status)
+      const { data: existingUser } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', data.user.id)
+        .single();
+      
+      if (!existingUser) {
+        await ensureUserRecord(data.user.id, false, email);
+      }
     }
   };
 
@@ -132,8 +140,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     if (error) throw error;
     if (data.user) {
+      // Update user state first so ensureUserRecord can access it
+      setUser(data.user);
+      setSession(data.session);
+      
       // Create user record (but don't auto-set trial status - they need to go through paywall)
-      await ensureUserRecord(data.user.id, false);
+      await ensureUserRecord(data.user.id, false, email);
     }
   };
 
@@ -172,8 +184,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (data.user) {
-        // Ensure user record exists
-        await ensureUserRecord(data.user.id, false);
+        // Update user state first so ensureUserRecord can access it
+        setUser(data.user);
+        setSession(data.session);
+        
+        // Check if user already exists
+        const { data: existingUser } = await supabase
+          .from('users')
+          .select('id')
+          .eq('id', data.user.id)
+          .single();
+        
+        // Get email from user object (Apple Sign-In might have email in user_metadata)
+        const userEmail = data.user.email || 
+                         data.user.user_metadata?.email ||
+                         data.user.app_metadata?.email;
+        
+        // Only create record if user doesn't exist (new user)
+        if (!existingUser) {
+          await ensureUserRecord(data.user.id, false, userEmail);
+        }
       }
     } catch (error: any) {
       // Handle user cancellation
@@ -196,8 +226,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSubscriptionStatus('expired');
   };
 
-  const ensureUserRecord = async (userId: string, setTrial: boolean = false) => {
-    const userData: any = { id: userId };
+  const ensureUserRecord = async (userId: string, setTrial: boolean = false, userEmail?: string) => {
+    // Get email from parameter, current user, or session
+    const currentUser = user || session?.user;
+    const email = userEmail || 
+                  currentUser?.email || 
+                  currentUser?.user_metadata?.email || 
+                  currentUser?.app_metadata?.email ||
+                  `${userId}@apple-signin.local`; // Fallback for Apple Sign-In users without email
+    
+    const userData: any = { 
+      id: userId,
+      email: email
+    };
     if (setTrial) {
       userData.subscription_status = 'trial';
       userData.trial_started_at = new Date().toISOString();

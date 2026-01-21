@@ -74,3 +74,21 @@ export interface DailyHabitCompletion {
   created_at: string;
   updated_at: string;
 }
+
+export interface DailyWisdom {
+  id: string;
+  quote: string;
+  author?: string | null;
+  created_at: string;
+}
+
+export interface Scribble {
+  id: string;
+  user_id: string;
+  title: string;
+  body?: string | null;
+  date?: string | null; // ISO date string, NULL for general notes
+  pinned: boolean;
+  created_at: string;
+  updated_at: string;
+}

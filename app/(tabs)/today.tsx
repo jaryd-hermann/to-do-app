@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Alert, Dimensions } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useDailyTasks } from '@/hooks/useTasks';
@@ -15,6 +15,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { format, startOfWeek, addDays, isSameDay, isToday, isPast, isFuture } from 'date-fns';
 import { Ionicons } from '@expo/vector-icons';
 import { useDailyWisdom } from '@/hooks/useDailyWisdom';
+import { useScribbles } from '@/hooks/useScribbles';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DAY_CARD_WIDTH = 50 + 8; // card width + margin
@@ -32,6 +33,14 @@ export default function TodayScreen() {
   const { principles } = usePrinciples();
   const { activeGoals } = useGoals();
   const { wisdom } = useDailyWisdom(selectedDate);
+  const { getScribbleByDate, refetch: refetchScribbles } = useScribbles();
+
+  // Refetch scribbles when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      refetchScribbles();
+    }, [refetchScribbles])
+  );
 
   // Get 7 days back, current day, and 7 days forward (15 days total)
   const dayNavigation = useMemo(() => {
@@ -312,6 +321,61 @@ export default function TodayScreen() {
           {/* Daily Habits Section */}
           <DailyHabitsSection date={selectedDate} />
 
+          {/* Daily Scribble Section */}
+          <View className="mb-6" style={{ paddingHorizontal: 24 }}>
+            <Text className={`text-sm font-semibold mb-3 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+              thoughts, ideas, reflections, etc
+            </Text>
+            {(() => {
+              const dateStr = format(selectedDate, 'yyyy-MM-dd');
+              const existingScribble = getScribbleByDate(dateStr);
+              
+              if (existingScribble) {
+                return (
+                  <TouchableOpacity
+                    onPress={() => {
+                      router.push({
+                        pathname: '/scribbles/editor',
+                        params: { id: existingScribble.id, returnTo: 'today' },
+                      });
+                    }}
+                    className={`rounded-2xl p-4 ${isDark ? '' : 'bg-gray-100'}`}
+                    style={isDark ? { backgroundColor: '#000000', borderWidth: 1, borderColor: '#27272A' } : undefined}
+                  >
+                    <Text className={`text-lg font-semibold mb-1 ${isDark ? 'text-white' : 'text-black'}`}>
+                      {existingScribble.title}
+                    </Text>
+                    {existingScribble.body && (
+                      <Text
+                        className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}
+                        numberOfLines={2}
+                      >
+                        {existingScribble.body}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                );
+              } else {
+                return (
+                  <TouchableOpacity
+                    onPress={() => {
+                      router.push({
+                        pathname: '/scribbles/editor',
+                        params: { date: dateStr, returnTo: 'today' },
+                      });
+                    }}
+                  >
+                    <Text
+                      className={`text-base underline ${isDark ? 'text-gray-400' : 'text-gray-600'}`}
+                    >
+                      today's scribble
+                    </Text>
+                  </TouchableOpacity>
+                );
+              }
+            })()}
+          </View>
+
           {/* Marketing Carousel */}
           <MarketingCarousel cards={marketingCards} hideSeen={true} />
         </ScrollView>
@@ -362,6 +426,61 @@ export default function TodayScreen() {
 
               {/* Daily Habits Section */}
               <DailyHabitsSection date={selectedDate} />
+
+              {/* Daily Scribble Section */}
+              <View className="mb-6" style={{ paddingHorizontal: 24 }}>
+                <Text className={`text-sm font-semibold mb-3 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                  thoughts, ideas, reflections, etc
+                </Text>
+                {(() => {
+                  const dateStr = format(selectedDate, 'yyyy-MM-dd');
+                  const existingScribble = getScribbleByDate(dateStr);
+                  
+                  if (existingScribble) {
+                    return (
+                      <TouchableOpacity
+                        onPress={() => {
+                          router.push({
+                            pathname: '/scribbles/editor',
+                            params: { id: existingScribble.id, returnTo: 'today' },
+                          });
+                        }}
+                        className={`rounded-2xl p-4 ${isDark ? '' : 'bg-gray-100'}`}
+                        style={isDark ? { backgroundColor: '#000000', borderWidth: 1, borderColor: '#27272A' } : undefined}
+                      >
+                        <Text className={`text-lg font-semibold mb-1 ${isDark ? 'text-white' : 'text-black'}`}>
+                          {existingScribble.title}
+                        </Text>
+                        {existingScribble.body && (
+                          <Text
+                            className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}
+                            numberOfLines={2}
+                          >
+                            {existingScribble.body}
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  } else {
+                    return (
+                      <TouchableOpacity
+                        onPress={() => {
+                          router.push({
+                            pathname: '/scribbles/editor',
+                            params: { date: dateStr, returnTo: 'today' },
+                          });
+                        }}
+                      >
+                        <Text
+                          className={`text-base underline ${isDark ? 'text-gray-400' : 'text-gray-600'}`}
+                        >
+                          today's scribble
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  }
+                })()}
+              </View>
 
               {/* Marketing Carousel */}
               <MarketingCarousel cards={marketingCards} hideSeen={true} />

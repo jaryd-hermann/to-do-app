@@ -299,13 +299,14 @@ function PrincipleForm({
       />
       <TextInput
         className={`py-4 px-4 rounded-2xl mb-6 ${isDark ? '' : 'bg-gray-100'}`}
-        style={isDark ? { backgroundColor: '#18181B', color: '#FFFFFF' } : { color: '#000000' }}
+        style={isDark ? { backgroundColor: '#18181B', color: '#FFFFFF', minHeight: 160 } : { color: '#000000', minHeight: 160 }}
         placeholder="Description (optional)"
         placeholderTextColor={isDark ? '#9CA3AF' : '#6B7280'}
         value={description}
         onChangeText={setDescription}
         multiline
-        numberOfLines={4}
+        numberOfLines={8}
+        textAlignVertical="top"
       />
       <TouchableOpacity
         className={`py-4 rounded-full ${isDark ? 'bg-white' : 'bg-black'}`}

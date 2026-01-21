@@ -42,10 +42,13 @@ export default function AuthScreen() {
     try {
       if (isSignUp) {
         await signUp(email, password);
+        // New users go to about screen
+        router.replace('/(auth)/about');
       } else {
         await signIn(email, password);
+        // Existing users - let app/index.tsx handle routing based on subscription status
+        // It will route to paywall if expired, or directly to today if active
       }
-      router.replace('/(auth)/about');
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Authentication failed');
     } finally {
@@ -73,7 +76,9 @@ export default function AuthScreen() {
     try {
       await signInWithApple();
       console.log('Apple Sign-In successful, navigating...');
-      router.replace('/(auth)/about');
+      // Let app/index.tsx handle routing based on subscription status
+      // It will route to paywall if expired, or directly to today if active
+      // New users will be routed to about screen by app/index.tsx if needed
     } catch (error: any) {
       console.error('Apple Sign-In Error Details:', {
         message: error.message,

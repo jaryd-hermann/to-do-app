@@ -18,11 +18,11 @@ export function DailyHabitsSection({ date }: DailyHabitsSectionProps) {
   }
 
   return (
-    <View className="mb-6">
-      <Text className={`text-sm font-semibold mb-3 px-6 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+    <View className="mb-6 px-6">
+      <Text className={`text-sm font-semibold mb-3 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
         things you're trying to do daily
       </Text>
-      <View className="flex-row flex-wrap px-6">
+      <View className="flex-row flex-wrap">
         {selectedHabits.map((habit) => {
           const completed = isHabitCompleted(habit.habit_id, habit.habit_type);
           return (

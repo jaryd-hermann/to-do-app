@@ -384,7 +384,7 @@ function GoalForm({
         onPress={() => setShowPrinciplePicker(!showPrinciplePicker)}
       >
         <Text className={`text-sm mb-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-          Select principle
+          What principle does this goal align to?
         </Text>
         <Text className={`${selectedPrinciple ? '' : 'text-gray-500'} ${isDark ? 'text-white' : 'text-black'}`}>
           {selectedPrinciple ? selectedPrinciple.title : 'Choose a principle'}
