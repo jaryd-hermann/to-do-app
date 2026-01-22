@@ -47,7 +47,7 @@ module.exports = {
     ios: {
       supportsTablet: true,
       bundleIdentifier: "com.jarydhermann.mindjoy",
-      buildNumber: process.env.BUILD_NUMBER || "15",
+      buildNumber: process.env.BUILD_NUMBER || "16",
       usesAppleSignIn: true,
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false
@@ -59,7 +59,7 @@ module.exports = {
         backgroundColor: "#000000"
       },
       package: "com.jarydhermann.mindjoy",
-      versionCode: parseInt(process.env.VERSION_CODE || "15", 10)
+      versionCode: parseInt(process.env.VERSION_CODE || "16", 10)
     },
     web: {
       favicon: "./assets/favicon.png"
