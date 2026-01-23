@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { DailyHabitCompletion, SelectedHabit } from '@/types/models';
@@ -48,23 +48,7 @@ export function useDailyHabits(date: Date) {
     }
   }, [date]);
 
-  useEffect(() => {
-    if (user) {
-      fetchAll();
-    }
-  }, [user, dateStr]);
-
-  const fetchAll = async () => {
-    if (!user) return;
-    setLoading(true);
-    try {
-      await Promise.all([fetchSelectedHabits(), fetchCompletions()]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchSelectedHabits = async () => {
+  const fetchSelectedHabits = useCallback(async () => {
     if (!user) return;
 
     const { data, error } = await supabase
@@ -75,31 +59,39 @@ export function useDailyHabits(date: Date) {
 
     if (error) throw error;
 
-    // Enrich with titles
-    const enriched = await Promise.all(
-      (data || []).map(async (selected) => {
-        if (selected.habit_type === 'system') {
-          const { data: habit } = await supabase
-            .from('system_habits')
-            .select('title')
-            .eq('id', selected.habit_id)
-            .single();
-          return { ...selected, title: habit?.title };
-        } else {
-          const { data: habit } = await supabase
-            .from('user_habits')
-            .select('title')
-            .eq('id', selected.habit_id)
-            .single();
-          return { ...selected, title: habit?.title };
-        }
-      })
-    );
+    if (!data || data.length === 0) {
+      setSelectedHabits([]);
+      return;
+    }
+
+    // Batch fetch all habit titles at once instead of individual requests
+    const systemHabitIds = data.filter(s => s.habit_type === 'system').map(s => s.habit_id);
+    const userHabitIds = data.filter(s => s.habit_type === 'custom').map(s => s.habit_id);
+
+    const [systemHabitsResult, userHabitsResult] = await Promise.all([
+      systemHabitIds.length > 0
+        ? supabase.from('system_habits').select('id, title').in('id', systemHabitIds)
+        : Promise.resolve({ data: [], error: null }),
+      userHabitIds.length > 0
+        ? supabase.from('user_habits').select('id, title').in('id', userHabitIds)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+
+    const systemHabitsMap = new Map((systemHabitsResult.data || []).map(h => [h.id, h.title]));
+    const userHabitsMap = new Map((userHabitsResult.data || []).map(h => [h.id, h.title]));
+
+    const enriched = (data || []).map((selected) => {
+      const title =
+        selected.habit_type === 'system'
+          ? systemHabitsMap.get(selected.habit_id)
+          : userHabitsMap.get(selected.habit_id);
+      return { ...selected, title: title || 'Unknown' };
+    });
 
     setSelectedHabits(enriched);
-  };
+  }, [user]);
 
-  const fetchCompletions = async () => {
+  const fetchCompletions = useCallback(async () => {
     if (!user) return;
 
     const { data, error } = await supabase
@@ -110,7 +102,23 @@ export function useDailyHabits(date: Date) {
 
     if (error) throw error;
     setCompletions(data || []);
-  };
+  }, [user, dateStr]);
+
+  const fetchAll = useCallback(async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      await Promise.all([fetchSelectedHabits(), fetchCompletions()]);
+    } finally {
+      setLoading(false);
+    }
+  }, [user, fetchSelectedHabits, fetchCompletions]);
+
+  useEffect(() => {
+    if (user) {
+      fetchAll();
+    }
+  }, [user, fetchAll]);
 
   const toggleCompletion = async (habitId: string, habitType: 'system' | 'custom') => {
     if (!user) return;

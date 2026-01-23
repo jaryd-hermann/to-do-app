@@ -42,7 +42,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }, 5000); // 5 second timeout
 
       // Get initial session
-      supabase.auth.getSession().then(({ data: { session } }) => {
+      supabase.auth.getSession().then(async ({ data: { session } }) => {
         try {
           if (timeoutId) {
             clearTimeout(timeoutId);
@@ -51,7 +51,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setSession(session);
           setUser(session?.user ?? null);
           if (session?.user) {
-            checkSubscriptionStatus(session.user);
+            // Wait for subscription check to complete before setting loading to false
+            await checkSubscriptionStatus(session.user);
           } else {
             setLoading(false);
           }
@@ -76,14 +77,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const {
           data: { subscription: authSubscription },
-        } = supabase.auth.onAuthStateChange((event, session) => {
+        } = supabase.auth.onAuthStateChange(async (event, session) => {
           try {
             console.log('Auth state changed:', event, 'User:', session?.user?.id || 'none');
             setSession(session);
             setUser(session?.user ?? null);
             if (session?.user) {
               console.log('Auth state change: User logged in, checking subscription...');
-              checkSubscriptionStatus(session.user);
+              // Wait for subscription check to complete
+              await checkSubscriptionStatus(session.user);
             } else {
               console.log('Auth state change: No user, setting expired');
               setSubscriptionStatus('expired');

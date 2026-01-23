@@ -27,10 +27,14 @@ export function MarketingCarousel({ cards, hideSeen = false }: MarketingCarousel
   const isDark = theme === 'dark';
   const scrollViewRef = useRef<ScrollView>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [refreshKey, setRefreshKey] = useState(0);
   const { isStorySeen, markStoryAsSeen } = useSeenStories();
 
   // Filter out seen cards if hideSeen is true
-  const visibleCards = hideSeen ? cards.filter(card => !isStorySeen(card.id)) : cards;
+  // Use refreshKey to force recalculation when stories are marked as seen
+  const visibleCards = React.useMemo(() => {
+    return hideSeen ? cards.filter(card => !isStorySeen(card.id)) : cards;
+  }, [cards, hideSeen, isStorySeen, refreshKey]);
 
   // Don't render if no visible cards
   if (visibleCards.length === 0) {
@@ -47,9 +51,11 @@ export function MarketingCarousel({ cards, hideSeen = false }: MarketingCarousel
     router.push(route as any);
   };
 
-  const handleMarkAsSeen = (cardId: string, e: any) => {
+  const handleMarkAsSeen = async (cardId: string, e: any) => {
     e.stopPropagation();
-    markStoryAsSeen(cardId);
+    await markStoryAsSeen(cardId);
+    // Force re-render to update visible cards
+    setRefreshKey(prev => prev + 1);
   };
 
   return (

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Goal } from '@/types/models';
@@ -8,12 +8,7 @@ export function useGoals() {
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
 
-  useEffect(() => {
-    if (!user) return;
-    fetchGoals();
-  }, [user]);
-
-  const fetchGoals = async () => {
+  const fetchGoals = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -30,7 +25,12 @@ export function useGoals() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    fetchGoals();
+  }, [user, fetchGoals]);
 
   const createGoal = async (
     title: string,
@@ -155,12 +155,29 @@ export function useGoals() {
   const reorderGoals = async (newOrder: Goal[]) => {
     if (!user) return;
 
-    const updates = newOrder.map((goal, index) => ({
+    // First, set all positions to negative values to avoid unique constraint violations
+    const tempUpdates = newOrder.map((goal, index) => ({
+      id: goal.id,
+      position: -(index + 1), // Use negative values temporarily
+    }));
+
+    for (const update of tempUpdates) {
+      const { error } = await supabase
+        .from('goals')
+        .update({ position: update.position })
+        .eq('id', update.id)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+    }
+
+    // Then set the correct positions
+    const finalUpdates = newOrder.map((goal, index) => ({
       id: goal.id,
       position: index,
     }));
 
-    for (const update of updates) {
+    for (const update of finalUpdates) {
       const { error } = await supabase
         .from('goals')
         .update({ position: update.position })

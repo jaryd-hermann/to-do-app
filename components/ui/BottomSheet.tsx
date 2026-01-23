@@ -8,9 +8,10 @@ interface BottomSheetProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
+  onDelete?: () => void;
 }
 
-export function BottomSheet({ visible, onClose, title, children }: BottomSheetProps) {
+export function BottomSheet({ visible, onClose, title, children, onDelete }: BottomSheetProps) {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
@@ -46,13 +47,24 @@ export function BottomSheet({ visible, onClose, title, children }: BottomSheetPr
               <Text className={`text-xl font-bold ${isDark ? 'text-white' : 'text-black'}`}>
                 {title}
               </Text>
-              <TouchableOpacity onPress={onClose}>
-                <Ionicons
-                  name="close"
-                  size={24}
-                  color={isDark ? '#FFFFFF' : '#000000'}
-                />
-              </TouchableOpacity>
+              <View className="flex-row items-center">
+                {onDelete && (
+                  <TouchableOpacity onPress={onDelete} className="mr-4">
+                    <Ionicons
+                      name="trash-outline"
+                      size={24}
+                      color={isDark ? '#EF4444' : '#EF4444'}
+                    />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity onPress={onClose}>
+                  <Ionicons
+                    name="close"
+                    size={24}
+                    color={isDark ? '#FFFFFF' : '#000000'}
+                  />
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* Content */}

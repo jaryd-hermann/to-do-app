@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, TextInput, Alert, Modal, Pressable } from 'react-native';
+import { View, Text, TouchableOpacity, TextInput, Alert, Modal, Pressable, KeyboardAvoidingView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useHabits } from '@/hooks/useHabits';
@@ -84,16 +84,20 @@ export function CustomHabitModal({ visible, onClose, habit, onEditComplete }: Cu
       statusBarTranslucent={true}
       hardwareAccelerated={true}
     >
-      <Pressable
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         className="flex-1 justify-end"
-        style={{ backgroundColor: 'rgba(0, 0, 0, 0.9)', zIndex: 10000 }}
-        onPress={onClose}
       >
         <Pressable
-          className={`rounded-t-3xl ${isDark ? 'bg-black' : 'bg-white'}`}
-          style={isDark ? { borderTopWidth: 1, borderTopColor: '#FFFFFF' } : undefined}
-          onPress={(e) => e.stopPropagation()}
+          className="flex-1 justify-end"
+          style={{ backgroundColor: 'rgba(0, 0, 0, 0.9)', zIndex: 10000 }}
+          onPress={onClose}
         >
+          <Pressable
+            className={`rounded-t-3xl ${isDark ? 'bg-black' : 'bg-white'}`}
+            style={isDark ? { borderTopWidth: 1, borderTopColor: '#FFFFFF' } : undefined}
+            onPress={(e) => e.stopPropagation()}
+          >
           {/* Handle */}
           <View className="items-center py-2">
             <View className={`w-12 h-1 rounded-full ${isDark ? 'bg-gray-700' : 'bg-gray-300'}`} />
@@ -147,6 +151,7 @@ export function CustomHabitModal({ visible, onClose, habit, onEditComplete }: Cu
           </View>
         </Pressable>
       </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

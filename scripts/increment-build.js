@@ -9,16 +9,32 @@ const fs = require('fs');
 const path = require('path');
 
 const appJsonPath = path.join(__dirname, '..', 'app.json');
+const appConfigPath = path.join(__dirname, '..', 'app.config.js');
 const infoPlistPath = path.join(__dirname, '..', 'ios', 'Mindjoy', 'Info.plist');
 const xcodeProjectPath = path.join(__dirname, '..', 'ios', 'Mindjoy.xcodeproj', 'project.pbxproj');
 
+function getAppConfig() {
+  // Prefer app.config.js if it exists, otherwise use app.json
+  if (fs.existsSync(appConfigPath)) {
+    // Delete require cache to get fresh config
+    delete require.cache[require.resolve(appConfigPath)];
+    const config = require(appConfigPath);
+    return { config: config.expo || config, isJs: true };
+  } else if (fs.existsSync(appJsonPath)) {
+    const config = JSON.parse(fs.readFileSync(appJsonPath, 'utf8'));
+    return { config: config.expo || config, isJs: false };
+  } else {
+    throw new Error('Neither app.config.js nor app.json found!');
+  }
+}
+
 function incrementBuildNumber() {
-  // Read app.json
-  const appJson = JSON.parse(fs.readFileSync(appJsonPath, 'utf8'));
+  // Read app config (app.config.js or app.json)
+  const { config: appConfig, isJs } = getAppConfig();
   
   // Get current iOS build number or default to 1
-  const currentIosBuild = appJson.expo?.ios?.buildNumber || '1';
-  const currentAndroidBuild = appJson.expo?.android?.versionCode || 1;
+  const currentIosBuild = appConfig.ios?.buildNumber || '1';
+  const currentAndroidBuild = appConfig.android?.versionCode || 1;
   
   // Increment build numbers
   const newIosBuild = String(parseInt(currentIosBuild, 10) + 1);
@@ -28,20 +44,57 @@ function incrementBuildNumber() {
   console.log(`   iOS: ${currentIosBuild} → ${newIosBuild}`);
   console.log(`   Android: ${currentAndroidBuild} → ${newAndroidBuild}`);
   
-  // Update app.json
-  if (!appJson.expo.ios) {
-    appJson.expo.ios = {};
+  // Update app config
+  if (!appConfig.ios) {
+    appConfig.ios = {};
   }
-  if (!appJson.expo.android) {
-    appJson.expo.android = {};
+  if (!appConfig.android) {
+    appConfig.android = {};
   }
   
-  appJson.expo.ios.buildNumber = newIosBuild;
-  appJson.expo.android.versionCode = newAndroidBuild;
+  appConfig.ios.buildNumber = newIosBuild;
+  appConfig.android.versionCode = newAndroidBuild;
   
-  // Write back to app.json
-  fs.writeFileSync(appJsonPath, JSON.stringify(appJson, null, 2) + '\n');
-  console.log(`✅ Updated app.json`);
+  // Write back to app.config.js or app.json
+  if (isJs) {
+    // Read the original file to preserve formatting and other code
+    let configFile = fs.readFileSync(appConfigPath, 'utf8');
+    
+    // Update buildNumber in the file
+    configFile = configFile.replace(
+      /buildNumber:\s*process\.env\.BUILD_NUMBER\s*\|\|\s*["']\d+["']/,
+      `buildNumber: process.env.BUILD_NUMBER || "${newIosBuild}"`
+    );
+    
+    // Update versionCode in the file
+    configFile = configFile.replace(
+      /versionCode:\s*parseInt\(process\.env\.VERSION_CODE\s*\|\|\s*["']\d+["'],\s*\d+\)/,
+      `versionCode: parseInt(process.env.VERSION_CODE || "${newAndroidBuild}", 10)`
+    );
+    
+    // If the pattern doesn't match, try simpler replacement
+    if (!configFile.includes(`buildNumber: process.env.BUILD_NUMBER || "${newIosBuild}"`)) {
+      configFile = configFile.replace(
+        /buildNumber:\s*["']?\d+["']?/,
+        `buildNumber: "${newIosBuild}"`
+      );
+    }
+    
+    if (!configFile.includes(`versionCode: parseInt(process.env.VERSION_CODE || "${newAndroidBuild}"`)) {
+      configFile = configFile.replace(
+        /versionCode:\s*parseInt\(["']?\d+["']?/,
+        `versionCode: parseInt("${newAndroidBuild}"`
+      );
+    }
+    
+    fs.writeFileSync(appConfigPath, configFile);
+    console.log(`✅ Updated app.config.js`);
+  } else {
+    // Write back to app.json
+    const appJson = { expo: appConfig };
+    fs.writeFileSync(appJsonPath, JSON.stringify(appJson, null, 2) + '\n');
+    console.log(`✅ Updated app.json`);
+  }
   
   // Update Info.plist if it exists
   if (fs.existsSync(infoPlistPath)) {

@@ -8,33 +8,20 @@ export function useDailyTasks(date: Date) {
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
   
-  // Safely get date string with defensive checks
+  // Safely get date string with defensive checks - use local date to avoid timezone shifts
   const dateStr = React.useMemo(() => {
     try {
+      let targetDate: Date;
       if (!date || !(date instanceof Date) || isNaN(date.getTime())) {
         // Fallback to today if date is invalid
-        const today = new Date();
-        const iso = today.toISOString();
-        if (typeof iso === 'string' && iso.includes('T')) {
-          return iso.split('T')[0];
-        }
-        // Ultimate fallback
-        const year = today.getFullYear();
-        const month = String(today.getMonth() + 1).padStart(2, '0');
-        const day = String(today.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
+        targetDate = new Date();
+      } else {
+        targetDate = date;
       }
-      const isoString = date.toISOString();
-      if (typeof isoString === 'string' && isoString.includes('T')) {
-        const parts = isoString.split('T');
-        if (parts.length > 0 && typeof parts[0] === 'string') {
-          return parts[0];
-        }
-      }
-      // Fallback if split fails
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
+      // Use local date methods to avoid timezone shifts
+      const year = targetDate.getFullYear();
+      const month = String(targetDate.getMonth() + 1).padStart(2, '0');
+      const day = String(targetDate.getDate()).padStart(2, '0');
       return `${year}-${month}-${day}`;
     } catch (error) {
       console.error('Error getting date string:', error);
@@ -161,17 +148,36 @@ export function useDailyTasks(date: Date) {
   const reorderTasks = async (newOrder: Task[]) => {
     if (!user) return;
 
-    const updates = newOrder.map((task, index) => ({
+    // First, set all positions to negative values to avoid unique constraint violations
+    const tempUpdates = newOrder.map((task, index) => ({
       id: task.id,
-      position: index,
+      position: -(index + 1), // Use negative values temporarily
     }));
 
-    for (const update of updates) {
+    for (const update of tempUpdates) {
       const { error } = await supabase
         .from('tasks')
         .update({ position: update.position })
         .eq('id', update.id)
-        .eq('user_id', user.id);
+        .eq('user_id', user.id)
+        .eq('date', dateStr);
+
+      if (error) throw error;
+    }
+
+    // Then set the correct positions
+    const finalUpdates = newOrder.map((task, index) => ({
+      id: task.id,
+      position: index,
+    }));
+
+    for (const update of finalUpdates) {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ position: update.position })
+        .eq('id', update.id)
+        .eq('user_id', user.id)
+        .eq('date', dateStr);
 
       if (error) throw error;
     }

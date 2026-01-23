@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, ScrollView, Alert, Dimensions } from 'rea
 import { router, useFocusEffect } from 'expo-router';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import * as Haptics from 'expo-haptics';
 import { useDailyTasks } from '@/hooks/useTasks';
 import { usePrinciples } from '@/hooks/usePrinciples';
 import { useGoals } from '@/hooks/useGoals';
@@ -16,12 +17,17 @@ import { format, startOfWeek, addDays, isSameDay, isToday, isPast, isFuture } fr
 import { Ionicons } from '@expo/vector-icons';
 import { useDailyWisdom } from '@/hooks/useDailyWisdom';
 import { useScribbles } from '@/hooks/useScribbles';
+import { useDailyHabits } from '@/hooks/useDailyHabits';
+import { useAuth } from '@/contexts/AuthContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DAY_CARD_WIDTH = 50 + 8; // card width + margin
 
 export default function TodayScreen() {
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  // Normalize initial date to midnight local time
+  const today = new Date();
+  const normalizedToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const [selectedDate, setSelectedDate] = useState(normalizedToday);
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const dayScrollViewRef = useRef<ScrollView>(null);
@@ -30,31 +36,40 @@ export default function TodayScreen() {
 
   const { tasks, loading, createTask, updateTask, deleteTask, reorderTasks, toggleComplete, refetch } =
     useDailyTasks(selectedDate);
-  const { principles } = usePrinciples();
-  const { activeGoals } = useGoals();
+  const { principles, refetch: refetchPrinciples } = usePrinciples();
+  const { activeGoals, refetch: refetchGoals } = useGoals();
   const { wisdom } = useDailyWisdom(selectedDate);
   const { getScribbleByDate, refetch: refetchScribbles } = useScribbles();
+  const { refetch: refetchDailyHabits } = useDailyHabits(selectedDate);
 
-  // Refetch scribbles when screen comes into focus
+  // Refetch data when screen comes into focus - only run once per focus
   useFocusEffect(
     React.useCallback(() => {
       refetchScribbles();
-    }, [refetchScribbles])
+      refetchPrinciples();
+      refetchGoals();
+      refetchDailyHabits();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []) // Empty deps - only run when screen comes into focus, not when functions change
   );
 
   // Get 7 days back, current day, and 7 days forward (15 days total)
   const dayNavigation = useMemo(() => {
     const today = new Date();
+    // Normalize today to midnight local time
+    const normalizedToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     const days: Date[] = [];
     // 7 days back
     for (let i = 7; i > 0; i--) {
-      days.push(addDays(today, -i));
+      const day = addDays(normalizedToday, -i);
+      days.push(new Date(day.getFullYear(), day.getMonth(), day.getDate()));
     }
     // Current day
-    days.push(today);
+    days.push(normalizedToday);
     // 7 days forward
     for (let i = 1; i <= 7; i++) {
-      days.push(addDays(today, i));
+      const day = addDays(normalizedToday, i);
+      days.push(new Date(day.getFullYear(), day.getMonth(), day.getDate()));
     }
     return days;
   }, []); // Recalculate when app loads or when needed
@@ -80,12 +95,22 @@ export default function TodayScreen() {
     }
   }, []);
 
-  const handleCreateTask = async (title: string, principleId: string, goalId?: string | null) => {
+  const handleCreateTask = async (title: string, principleIds: string[], goalIds?: string[]) => {
+    // For now, store only the first principle and first goal until database schema supports multiple
+    const principleId = principleIds && principleIds.length > 0 ? principleIds[0] : '';
+    const goalId = goalIds && goalIds.length > 0 ? goalIds[0] : null;
     await createTask(title, principleId, goalId);
+    // Refetch principles and goals to ensure dropdowns are up to date
+    await refetchPrinciples();
+    await refetchGoals();
   };
 
-  const handleUpdateTask = async (title: string, principleId: string, goalId?: string | null, makePrimary?: boolean) => {
+  const handleUpdateTask = async (title: string, principleIds: string[], goalIds?: string[], makePrimary?: boolean) => {
     if (!editingTask) return;
+    
+    // For now, store only the first principle and first goal until database schema supports multiple
+    const principleId = principleIds && principleIds.length > 0 ? principleIds[0] : '';
+    const goalId = goalIds && goalIds.length > 0 ? goalIds[0] : null;
     
     if (makePrimary && editingTask.position !== 0) {
       // Reorder tasks: move current primary to position 1, and this task to position 0
@@ -111,9 +136,15 @@ export default function TodayScreen() {
       await reorderTasks(updatedTasks);
       // Ensure UI is updated
       await refetch();
+      // Refetch principles and goals to ensure dropdowns are up to date
+      await refetchPrinciples();
+      await refetchGoals();
     } else {
       await updateTask(editingTask.id, { title, principle_id: principleId, goal_id: goalId });
       await refetch();
+      // Refetch principles and goals to ensure dropdowns are up to date
+      await refetchPrinciples();
+      await refetchGoals();
     }
     setEditingTask(null);
   };
@@ -137,12 +168,23 @@ export default function TodayScreen() {
 
   const handleDragEnd = async ({ data }: { data: Task[] }) => {
     await reorderTasks(data);
+    // Refetch to ensure UI updates immediately with new positions
+    await refetch();
   };
 
   const renderTask = ({ item, drag, isActive }: RenderItemParams<Task>) => {
     const principle = principles.find((p) => p.id === item.principle_id);
     const goal = item.goal_id ? activeGoals.find((g) => g.id === item.goal_id) : null;
     const isPrimary = item.position === 0;
+
+    const handleLongPress = () => {
+      try {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      } catch (e) {
+        // Haptics not available, continue anyway
+      }
+      drag();
+    };
 
     return (
       <TaskCard
@@ -156,6 +198,8 @@ export default function TodayScreen() {
           setEditingTask(item);
           setShowTaskForm(true);
         }}
+        onLongPress={handleLongPress}
+        isDragging={isActive}
       />
     );
   };
@@ -187,6 +231,8 @@ export default function TodayScreen() {
     },
   ];
 
+  const { subscriptionStatus } = useAuth();
+
   return (
     <View className={`flex-1 ${isDark ? 'bg-black' : 'bg-white'}`}>
       {/* Header */}
@@ -198,6 +244,27 @@ export default function TodayScreen() {
           <Ionicons name="menu" size={24} color={isDark ? '#FFFFFF' : '#000000'} />
         </TouchableOpacity>
       </View>
+
+      {/* Expired Subscription Banner */}
+      {subscriptionStatus === 'expired' && (
+        <TouchableOpacity
+          onPress={() => router.push('/(auth)/paywall')}
+          className="mx-6 mb-4 rounded-2xl p-4"
+          style={{ backgroundColor: '#EF4444' }}
+        >
+          <View className="flex-row items-center justify-between">
+            <View className="flex-1">
+              <Text className="text-white font-semibold mb-1">
+                Subscription Expired
+              </Text>
+              <Text className="text-white/80 text-sm">
+                Tap to choose your plan and continue using Mindjoy
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
+          </View>
+        </TouchableOpacity>
+      )}
 
       {/* Day Selector */}
       <ScrollView
@@ -240,7 +307,11 @@ export default function TodayScreen() {
                 paddingBottom: 0,
                 opacity: isPastDate ? 0.5 : 1,
               }}
-              onPress={() => setSelectedDate(day)}
+              onPress={() => {
+                // Normalize date to midnight local time to avoid timezone issues
+                const normalizedDate = new Date(day.getFullYear(), day.getMonth(), day.getDate());
+                setSelectedDate(normalizedDate);
+              }}
             >
               <Text
                 className={`text-xs font-semibold ${
@@ -285,8 +356,7 @@ export default function TodayScreen() {
       {/* Task List */}
       {tasks.length === 0 ? (
         <ScrollView 
-          className="px-6" 
-          contentContainerStyle={{ paddingTop: 16, paddingBottom: 20 }}
+          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 20 }}
           showsVerticalScrollIndicator={false}
         >
           {/* Daily Wisdom Placeholder */}
@@ -322,7 +392,7 @@ export default function TodayScreen() {
           <DailyHabitsSection date={selectedDate} />
 
           {/* Daily Scribble Section */}
-          <View className="mb-6" style={{ paddingHorizontal: 24 }}>
+          <View className="mb-12">
             <Text className={`text-sm font-semibold mb-3 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
               thoughts, ideas, reflections, etc
             </Text>
@@ -381,26 +451,28 @@ export default function TodayScreen() {
         </ScrollView>
       ) : (
         <View style={{ flex: 1 }}>
-          {/* Today's Focus Header */}
-          <View className="px-6 pt-4 pb-2">
-            <Text className={`text-sm font-semibold ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-              today's focus
-            </Text>
-          </View>
           <DraggableFlatList
             data={tasks}
             onDragEnd={handleDragEnd}
             keyExtractor={(item) => item.id}
             renderItem={renderTask}
             scrollEnabled={true}
+            nestedScrollEnabled={true}
             contentContainerStyle={{ 
               paddingHorizontal: 24, 
               paddingTop: 8, 
               paddingBottom: 20
             }}
             ItemSeparatorComponent={null}
+            ListHeaderComponent={
+              <View style={{ paddingBottom: 8 }}>
+                <Text className={`text-sm font-semibold ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                  today's focus
+                </Text>
+              </View>
+            }
             ListFooterComponent={
-            <>
+            <View>
               {/* Add Task Button */}
               {canAddTask && (
                 <TouchableOpacity
@@ -428,7 +500,7 @@ export default function TodayScreen() {
               <DailyHabitsSection date={selectedDate} />
 
               {/* Daily Scribble Section */}
-              <View className="mb-6" style={{ paddingHorizontal: 24 }}>
+              <View className="mb-12">
                 <Text className={`text-sm font-semibold mb-3 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
                   thoughts, ideas, reflections, etc
                 </Text>
@@ -484,7 +556,7 @@ export default function TodayScreen() {
 
               {/* Marketing Carousel */}
               <MarketingCarousel cards={marketingCards} hideSeen={true} />
-            </>
+            </View>
             }
           />
         </View>
@@ -498,6 +570,11 @@ export default function TodayScreen() {
           setEditingTask(null);
         }}
         onSubmit={editingTask ? handleUpdateTask : handleCreateTask}
+        onDelete={editingTask ? () => {
+          handleDeleteTask(editingTask.id);
+          setShowTaskForm(false);
+          setEditingTask(null);
+        } : undefined}
         task={editingTask}
         principles={principles}
         goals={activeGoals}

@@ -54,7 +54,9 @@ export default function HabitsScreen() {
 
   const handleSave = async () => {
     try {
-      const habitsToSave = Array.from(selectedIds).map((id) => ({
+      // Create a snapshot of the Set and Map to avoid modification during iteration
+      const idsArray = Array.from(selectedIds);
+      const habitsToSave = idsArray.map((id) => ({
         id,
         type: selectedTypes.get(id)!,
       }));

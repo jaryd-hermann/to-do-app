@@ -17,16 +17,13 @@ export default function AuthScreen() {
   const isDark = theme === 'dark';
 
   // Navigate when user signs in successfully
+  // Always go to today screen - never auto-redirect to paywall
   useEffect(() => {
     if (!authLoading && user) {
-      console.log('Auth screen: User detected, navigating...', { subscriptionStatus });
-      if (subscriptionStatus === 'expired') {
-        router.replace('/(auth)/paywall');
-      } else {
-        router.replace('/(tabs)/today');
-      }
+      console.log('Auth screen: User detected, navigating to today...', { subscriptionStatus });
+      router.replace('/(tabs)/today');
     }
-  }, [user, subscriptionStatus, authLoading]);
+  }, [user, authLoading]);
 
   useEffect(() => {
     // Check if Apple Sign-In is available

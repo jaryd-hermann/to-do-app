@@ -12,6 +12,8 @@ interface TaskCardProps {
   onEdit: () => void;
   principleTitle?: string;
   goalTitle?: string;
+  onLongPress?: () => void;
+  isDragging?: boolean;
 }
 
 export function TaskCard({
@@ -22,6 +24,8 @@ export function TaskCard({
   onEdit,
   principleTitle,
   goalTitle,
+  onLongPress,
+  isDragging,
 }: TaskCardProps) {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
@@ -31,10 +35,16 @@ export function TaskCard({
       className={`rounded-2xl p-4 mb-3 ${isPrimary ? 'border-2 border-white' : ''} ${isDark ? '' : 'bg-gray-100'}`}
       style={isDark ? { 
         backgroundColor: '#000000',
-        borderWidth: isPrimary ? 2 : 1,
-        borderColor: isPrimary ? '#FFFFFF' : '#27272A'
-      } : undefined}
+        borderWidth: isPrimary ? 2 : (isDragging ? 2 : 1),
+        borderColor: isPrimary ? '#FFFFFF' : (isDragging ? '#FFFFFF' : '#27272A'),
+        opacity: isDragging ? 0.8 : 1,
+      } : {
+        borderWidth: isPrimary ? 2 : (isDragging ? 2 : 0),
+        borderColor: isPrimary ? '#000000' : (isDragging ? '#000000' : 'transparent'),
+        opacity: isDragging ? 0.8 : 1,
+      }}
       onPress={onEdit}
+      onLongPress={onLongPress}
     >
       <View className="flex-row items-start">
         {/* Checkbox */}
@@ -85,24 +95,6 @@ export function TaskCard({
             )}
           </View>
         </View>
-
-        {/* Edit Button */}
-        <TouchableOpacity onPress={onEdit} className="ml-2 mr-2">
-          <Ionicons
-            name="create-outline"
-            size={20}
-            color={isDark ? '#9CA3AF' : '#6B7280'}
-          />
-        </TouchableOpacity>
-
-        {/* Delete Button */}
-        <TouchableOpacity onPress={onDelete}>
-          <Ionicons
-            name="trash-outline"
-            size={20}
-            color={isDark ? '#9CA3AF' : '#6B7280'}
-          />
-        </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );

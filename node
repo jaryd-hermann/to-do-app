@@ -1,0 +1,23 @@
+🔢 Incrementing build numbers...
+
+📦 Incrementing build numbers:
+   iOS: 11 → 12
+   Android: 11 → 12
+✅ Updated app.config.js
+✅ Updated Info.plist CFBundleVersion to 12
+✅ Updated Xcode project CURRENT_PROJECT_VERSION to 12
+
+✅ Build numbers incremented successfully:
+   iOS buildNumber: 12
+   Android versionCode: 12
+
+📝 Committing build number changes...
+
+[main 89c74de] chore: increment build numbers (iOS: 12, Android: 12)
+ 3 files changed, 60 insertions(+), 3 deletions(-)
+ create mode 100644 app.config.js
+✅ Build number changes committed
+
+🚀 Starting EAS Build...
+
+The field "cli.appVersionSource" is not set, but it will be required in the future. Learn more: https://docs.expo.dev/build-reference/app-versions/

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Alert, TextInput, Share, Modal, Pressable } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Alert, TextInput, Share, Modal, Pressable, Image } from 'react-native';
 import { router, useNavigation } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -81,7 +81,9 @@ export default function SettingsScreen() {
             onPress={() => router.push('/habits')}
             className="rounded-2xl mb-6"
             style={{ 
-              backgroundColor: '#FFFFFF',
+              backgroundColor: '#000000',
+              borderWidth: 2,
+              borderColor: '#FFFFFF',
               shadowColor: '#000000',
               shadowOffset: { width: 0, height: 2 },
               shadowOpacity: 0.1,
@@ -91,14 +93,18 @@ export default function SettingsScreen() {
           >
             <View className="p-4">
               <View className="flex-row items-center">
-                <View className="w-12 h-12 bg-black/10 rounded-full items-center justify-center mr-4">
-                  <Ionicons name="calendar-outline" size={24} color="#000000" />
+                <View className="mr-4">
+                  <Image
+                    source={require('../../assets/habit.png')}
+                    style={{ width: 36, height: 36 }}
+                    resizeMode="contain"
+                  />
                 </View>
                 <View className="flex-1">
-                  <Text className="text-black text-lg font-bold mb-1">
+                  <Text className="text-white text-lg font-bold mb-1">
                     Add daily habits
                   </Text>
-                  <Text className="text-black/70 text-sm">
+                  <Text className="text-white/70 text-sm">
                     Track simple habits you want to build
                   </Text>
                 </View>

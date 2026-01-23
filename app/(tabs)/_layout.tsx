@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'react-native';
 import { useTheme } from '@/contexts/ThemeContext';
 
 export default function TabsLayout() {
@@ -22,8 +22,12 @@ export default function TabsLayout() {
         name="today"
         options={{
           title: 'Today',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="checkmark-circle-outline" size={size} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <Image
+              source={require('../../assets/task.png')}
+              style={{ width: 28, height: 28, opacity: focused ? 1 : 0.6 }}
+              resizeMode="contain"
+            />
           ),
         }}
       />
@@ -31,8 +35,12 @@ export default function TabsLayout() {
         name="principles"
         options={{
           title: 'Principles',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="bulb-outline" size={size} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <Image
+              source={require('../../assets/pillar.png')}
+              style={{ width: 28, height: 28, opacity: focused ? 1 : 0.6 }}
+              resizeMode="contain"
+            />
           ),
         }}
       />
@@ -40,8 +48,12 @@ export default function TabsLayout() {
         name="goals"
         options={{
           title: 'Goals',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="target-outline" size={size} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <Image
+              source={require('../../assets/goal.png')}
+              style={{ width: 28, height: 28, opacity: focused ? 1 : 0.6 }}
+              resizeMode="contain"
+            />
           ),
         }}
       />
@@ -49,8 +61,12 @@ export default function TabsLayout() {
         name="scribbles"
         options={{
           title: 'Scribbles',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="create-outline" size={size} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <Image
+              source={require('../../assets/scribble.png')}
+              style={{ width: 28, height: 28, opacity: focused ? 1 : 0.6 }}
+              resizeMode="contain"
+            />
           ),
         }}
       />
@@ -58,8 +74,12 @@ export default function TabsLayout() {
         name="progress"
         options={{
           title: 'Progress',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="stats-chart-outline" size={size} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <Image
+              source={require('../../assets/progress.png')}
+              style={{ width: 28, height: 28, opacity: focused ? 1 : 0.6 }}
+              resizeMode="contain"
+            />
           ),
         }}
       />

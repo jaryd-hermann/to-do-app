@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { router } from 'expo-router';
+import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import * as Haptics from 'expo-haptics';
 import { useGoals } from '@/hooks/useGoals';
 import { Goal } from '@/types/models';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -19,10 +22,11 @@ export default function GoalsScreen() {
   const isDark = theme === 'dark';
   const { user } = useAuth();
 
-  const { goals, loading, createGoal, updateGoal, deleteGoal, activateGoal, achieveGoal, activeGoals } =
+  const { goals, loading, createGoal, updateGoal, deleteGoal, activateGoal, achieveGoal, activeGoals, reorderGoals, refetch: refetchGoals } =
     useGoals();
-  const { principles } = usePrinciples();
+  const { principles, refetch: refetchPrinciples } = usePrinciples();
   const [actionCounts, setActionCounts] = useState<Record<string, number>>({});
+  const [completedGoalsExpanded, setCompletedGoalsExpanded] = useState(false);
 
   useEffect(() => {
     // Fetch action counts for all goals
@@ -42,9 +46,80 @@ export default function GoalsScreen() {
     fetchActionCounts();
   }, [goals, user]);
 
-  const priorityGoal = activeGoals.find((g) => g.position === 0);
-  const otherActiveGoals = activeGoals.filter((g) => g.position > 0);
   const inactiveGoals = goals.filter((g) => g.status === 'inactive');
+  const completedGoals = goals.filter((g) => g.status === 'achieved');
+
+  // Debug logging
+  useEffect(() => {
+    console.log('Goals state:', {
+      totalGoals: goals.length,
+      activeGoals: activeGoals.length,
+      activeGoalsData: activeGoals.map(g => ({ id: g.id, title: g.title, position: g.position, status: g.status })),
+      inactiveGoals: inactiveGoals.length,
+    });
+  }, [goals, activeGoals, inactiveGoals]);
+
+  const handleDragEnd = async ({ data }: { data: Goal[] }) => {
+    try {
+      // Reorder all active goals (including priority)
+      // The data passed here should only contain active goals from the DraggableFlatList
+      console.log('Reordering goals, data:', data.map(g => ({ id: g.id, title: g.title, position: g.position, status: g.status })));
+      const activeData = data.filter(g => g.status === 'active');
+      console.log('Active goals to reorder:', activeData.map(g => ({ id: g.id, title: g.title, position: g.position })));
+      if (activeData.length > 0) {
+        await reorderGoals(activeData);
+        await refetchGoals();
+        // Force a small delay to ensure state updates
+        setTimeout(() => {
+          refetchGoals();
+        }, 100);
+      }
+    } catch (error: any) {
+      console.error('Error reordering goals:', error);
+      Alert.alert('Error', error.message || 'Failed to reorder goals');
+      await refetchGoals(); // Refetch to restore original order
+    }
+  };
+
+  const renderGoal = ({ item, drag, isActive }: RenderItemParams<Goal>) => {
+    const handleLongPress = () => {
+      // Silently ignore haptics errors - they don't affect functionality
+      try {
+        if (typeof Haptics !== 'undefined' && Haptics?.impactAsync) {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+        }
+      } catch (e) {
+        // Haptics not available, continue anyway
+      }
+      if (drag) {
+        drag();
+      }
+    };
+
+    return (
+      <GoalCard
+        goal={item}
+        isPriority={item.position === 0}
+        actionCount={actionCounts[item.id] || 0}
+        principleTitle={principles.find((p) => p.id === item.principle_id)?.title}
+        onEdit={() => {
+          setEditingGoal(item);
+          setShowGoalForm(true);
+        }}
+        onDelete={() => handleDelete(item)}
+        onToggleComplete={async () => {
+          try {
+            await achieveGoal(item.id);
+            await refetchGoals();
+          } catch (error: any) {
+            Alert.alert('Error', error.message);
+          }
+        }}
+        onLongPress={handleLongPress}
+        isDragging={isActive}
+      />
+    );
+  };
 
   // Marketing cards for Goals page
   const marketingCards = [
@@ -80,6 +155,8 @@ export default function GoalsScreen() {
         onPress: async () => {
           try {
             await deleteGoal(goal.id);
+            await refetchGoals();
+            await refetchPrinciples();
           } catch (error: any) {
             Alert.alert('Error', error.message);
           }
@@ -91,9 +168,38 @@ export default function GoalsScreen() {
   const handleActivate = async (goal: Goal) => {
     try {
       await activateGoal(goal.id);
+      await refetchGoals();
+      await refetchPrinciples();
     } catch (error: any) {
       Alert.alert('Error', error.message);
     }
+  };
+
+  const handleCreateGoal = async (title: string, principleId: string, description?: string) => {
+    try {
+      await createGoal(title, principleId, description);
+      await refetchGoals();
+      await refetchPrinciples();
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
+      throw error; // Re-throw to let form handle it
+    }
+  };
+
+  const handleUpdateGoal = async (goalId: string, updates: Partial<Goal>) => {
+    try {
+      await updateGoal(goalId, updates);
+      await refetchGoals();
+      await refetchPrinciples();
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
+      throw error; // Re-throw to let form handle it
+    }
+  };
+
+  const handleUpdateGoalForForm = async (title: string, principleId: string, description?: string) => {
+    if (!editingGoal) return;
+    await handleUpdateGoal(editingGoal.id, { title, principle_id: principleId, description });
   };
 
   if (goals.length === 0) {
@@ -132,7 +238,7 @@ export default function GoalsScreen() {
             setShowGoalForm(false);
             setEditingGoal(null);
           }}
-          onSubmit={createGoal}
+          onSubmit={handleCreateGoal}
           goal={null}
           principles={principles}
         />
@@ -144,15 +250,8 @@ export default function GoalsScreen() {
     <View className={`flex-1 ${isDark ? 'bg-black' : 'bg-white'}`}>
       <ScrollView className="flex-1 px-6">
         {/* Header */}
-        <View className="pt-20 pb-4">
-          <Text className={`text-3xl font-bold mb-4 ${isDark ? 'text-white' : 'text-black'}`}>
-            My Goals
-          </Text>
-        </View>
-
-        {/* My Goals Section */}
-        <View className="flex-row items-center justify-between mb-4">
-          <Text className={`text-xl font-bold ${isDark ? 'text-white' : 'text-black'}`}>
+        <View className="pt-20 pb-4 flex-row items-center justify-between">
+          <Text className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-black'}`}>
             My Goals
           </Text>
           <TouchableOpacity
@@ -171,45 +270,18 @@ export default function GoalsScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Priority Goal */}
-        {priorityGoal && (
-          <View className="mb-6">
-            <Text className={`text-sm font-semibold mb-3 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-              PRIORITY GOAL
-            </Text>
-            <GoalCard
-              goal={priorityGoal}
-              isPriority
-              actionCount={actionCounts[priorityGoal.id] || 0}
-              principleTitle={principles.find((p) => p.id === priorityGoal.principle_id)?.title}
-              onEdit={() => {
-                setEditingGoal(priorityGoal);
-                setShowGoalForm(true);
-              }}
-              onDelete={() => handleDelete(priorityGoal)}
-            />
-          </View>
-        )}
-
-        {/* Active Goals */}
-        {otherActiveGoals.length > 0 && (
-          <View className="mb-6">
-            <Text className={`text-sm font-semibold mb-3 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-              ACTIVE GOALS
-            </Text>
-            {otherActiveGoals.map((goal) => (
-              <GoalCard
-                key={goal.id}
-                goal={goal}
-                actionCount={actionCounts[goal.id] || 0}
-                principleTitle={principles.find((p) => p.id === goal.principle_id)?.title}
-                onEdit={() => {
-                  setEditingGoal(goal);
-                  setShowGoalForm(true);
-                }}
-                onDelete={() => handleDelete(goal)}
+        {/* Active Goals - All active goals including priority in one draggable list */}
+        {activeGoals.length > 0 && (
+          <View className="mb-6 mt-6">
+            <GestureHandlerRootView>
+              <DraggableFlatList
+                data={activeGoals}
+                onDragEnd={handleDragEnd}
+                keyExtractor={(item) => item.id}
+                renderItem={renderGoal}
+                scrollEnabled={false}
               />
-            ))}
+            </GestureHandlerRootView>
           </View>
         )}
 
@@ -233,6 +305,39 @@ export default function GoalsScreen() {
           </View>
         )}
 
+        {/* Completed Goals - Collapsible */}
+        {completedGoals.length > 0 && (
+          <View className="mb-6">
+            <TouchableOpacity
+              onPress={() => setCompletedGoalsExpanded(!completedGoalsExpanded)}
+              className="flex-row items-center justify-between mb-3"
+            >
+              <Text className={`text-sm font-semibold ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                COMPLETED GOALS ({completedGoals.length})
+              </Text>
+              <Ionicons
+                name={completedGoalsExpanded ? 'chevron-up' : 'chevron-down'}
+                size={20}
+                color={isDark ? '#9CA3AF' : '#6B7280'}
+              />
+            </TouchableOpacity>
+            {completedGoalsExpanded && (
+              <View>
+                {completedGoals.map((goal) => (
+                  <GoalCard
+                    key={goal.id}
+                    goal={goal}
+                    isCompleted
+                    actionCount={actionCounts[goal.id] || 0}
+                    principleTitle={principles.find((p) => p.id === goal.principle_id)?.title}
+                    onDelete={() => handleDelete(goal)}
+                  />
+                ))}
+              </View>
+            )}
+          </View>
+        )}
+
         {/* Marketing Carousel */}
         <MarketingCarousel cards={marketingCards} hideSeen={true} />
       </ScrollView>
@@ -243,7 +348,7 @@ export default function GoalsScreen() {
           setShowGoalForm(false);
           setEditingGoal(null);
         }}
-        onSubmit={editingGoal ? updateGoal : createGoal}
+        onSubmit={editingGoal ? handleUpdateGoalForForm : handleCreateGoal}
         goal={editingGoal}
         principles={principles}
       />
@@ -255,67 +360,106 @@ function GoalCard({
   goal,
   isPriority,
   isInactive,
+  isCompleted,
   actionCount,
+  principleTitle,
   onEdit,
   onDelete,
   onActivate,
+  onToggleComplete,
+  onLongPress,
+  isDragging,
 }: {
   goal: Goal;
   isPriority?: boolean;
   isInactive?: boolean;
+  isCompleted?: boolean;
   actionCount: number;
+  principleTitle?: string;
   onEdit?: () => void;
   onDelete: () => void;
   onActivate?: () => void;
+  onToggleComplete?: () => void;
+  onLongPress?: () => void;
+  isDragging?: boolean;
 }) {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
   return (
-    <View
+    <TouchableOpacity
       className={`rounded-2xl p-4 mb-3 ${isPriority ? 'border-2 border-white' : ''} ${
         isDark ? '' : 'bg-gray-100'
       }`}
-      style={isDark ? { backgroundColor: '#000000' } : undefined}
+      style={isDark ? { 
+        backgroundColor: '#000000',
+        borderWidth: isPriority ? 2 : (isDragging ? 2 : (!isInactive && !isCompleted ? 1 : 0)),
+        borderColor: isPriority ? '#FFFFFF' : (isDragging ? '#FFFFFF' : (!isInactive && !isCompleted ? '#27272A' : 'transparent')),
+        opacity: isDragging ? 0.8 : (goal.status === 'achieved' ? 0.5 : 1),
+      } : {
+        borderWidth: isPriority ? 2 : (isDragging ? 2 : (!isInactive && !isCompleted ? 1 : 0)),
+        borderColor: isPriority ? '#000000' : (isDragging ? '#000000' : (!isInactive && !isCompleted ? '#E5E7EB' : 'transparent')),
+        opacity: isDragging ? 0.8 : (goal.status === 'achieved' ? 0.5 : 1),
+      }}
+      onPress={onEdit}
+      onLongPress={onLongPress}
+      disabled={isDragging || isInactive || isCompleted}
     >
       <View className="flex-row items-start">
+        {/* Checkbox for active goals */}
+        {!isInactive && onToggleComplete && (
+          <TouchableOpacity
+            onPress={(e) => {
+              e.stopPropagation();
+              onToggleComplete();
+            }}
+            className={`w-6 h-6 rounded-full border-2 mr-3 items-center justify-center mt-1 ${
+              goal.status === 'achieved'
+                ? isDark ? 'bg-white border-white' : 'bg-black border-black'
+                : isDark ? 'border-gray-600' : 'border-gray-400'
+            }`}
+          >
+            {goal.status === 'achieved' && (
+              <Ionicons
+                name="checkmark"
+                size={16}
+                color={isDark ? '#000000' : '#FFFFFF'}
+              />
+            )}
+          </TouchableOpacity>
+        )}
         <View className="flex-1">
-          <Text className={`text-lg font-bold mb-1 ${isDark ? 'text-white' : 'text-black'}`}>
+          {isPriority && (
+            <Text className={`text-xs font-semibold mb-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+              YOUR MAIN GOAL
+            </Text>
+          )}
+          <Text className={`text-lg font-bold mb-1 ${isDark ? 'text-white' : 'text-black'} ${goal.status === 'achieved' ? 'line-through' : ''}`}>
             {goal.title}
           </Text>
           {goal.description && (
-            <Text className={`text-sm mb-2 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+            <Text className={`text-base mb-2 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
               {goal.description}
             </Text>
           )}
           <View className="flex-row items-center">
             {principleTitle && (
-              <Text className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+              <Text className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
                 • {principleTitle}
               </Text>
             )}
-            <Text className={`text-xs ml-2 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+            <Text className={`text-sm ml-2 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
               {actionCount} {actionCount === 1 ? 'action' : 'actions'}
             </Text>
           </View>
         </View>
-        <View className="items-end">
-          {onEdit && (
-            <TouchableOpacity onPress={onEdit} className="mb-2">
-              <Text className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Edit</Text>
-            </TouchableOpacity>
-          )}
-          {onActivate && (
-            <TouchableOpacity onPress={onActivate} className="mb-2">
-              <Text className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Activate</Text>
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity onPress={onDelete}>
-            <Ionicons name="trash-outline" size={20} color={isDark ? '#9CA3AF' : '#6B7280'} />
+        {onActivate && (
+          <TouchableOpacity onPress={onActivate} className="ml-2">
+            <Text className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Activate</Text>
           </TouchableOpacity>
-        </View>
+        )}
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -323,12 +467,14 @@ function GoalForm({
   visible,
   onClose,
   onSubmit,
+  onDelete,
   goal,
   principles,
 }: {
   visible: boolean;
   onClose: () => void;
   onSubmit: (title: string, principleId: string, description?: string) => Promise<void>;
+  onDelete?: (goalId: string) => Promise<void>;
   goal?: Goal | null;
   principles: any[];
 }) {
@@ -366,10 +512,29 @@ function GoalForm({
     }
   };
 
+  const handleDelete = () => {
+    if (!goal || !onDelete) return;
+    Alert.alert('Delete Goal', 'Are you sure?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await onDelete(goal.id);
+            onClose();
+          } catch (error: any) {
+            Alert.alert('Error', error.message);
+          }
+        },
+      },
+    ]);
+  };
+
   const selectedPrinciple = principles.find((p) => p.id === selectedPrincipleId);
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title={goal ? 'Edit Goal' : 'New Goal'}>
+    <BottomSheet visible={visible} onClose={onClose} title={goal ? 'Edit Goal' : 'New Goal'} onDelete={goal ? handleDelete : undefined}>
       <TextInput
         className={`py-4 px-4 rounded-2xl mb-4 ${isDark ? '' : 'bg-gray-100'}`}
         style={isDark ? { backgroundColor: '#18181B', color: '#FFFFFF' } : { color: '#000000' }}
@@ -391,20 +556,34 @@ function GoalForm({
         </Text>
       </TouchableOpacity>
       {showPrinciplePicker && (
-        <View className={`rounded-2xl mb-6 ${isDark ? '' : 'bg-gray-100'}`} style={isDark ? { backgroundColor: '#27272A', paddingBottom: 8 } : undefined}>
-          {principles.map((principle) => (
-            <TouchableOpacity
-              key={principle.id}
-              className={`py-3 px-4 border-b ${isDark ? 'border-gray-700' : 'border-gray-200'}`}
-              style={isDark ? { backgroundColor: '#27272A' } : undefined}
-              onPress={() => {
-                setSelectedPrincipleId(principle.id);
-                setShowPrinciplePicker(false);
-              }}
-            >
-              <Text className={isDark ? 'text-white' : 'text-black'}>{principle.title}</Text>
-            </TouchableOpacity>
-          ))}
+        <View className={`rounded-2xl mb-6 ${isDark ? '' : 'bg-gray-100'}`} style={isDark ? { backgroundColor: '#000000', paddingBottom: 12, paddingHorizontal: 4 } : undefined}>
+          <ScrollView style={{ maxHeight: 180 }} showsVerticalScrollIndicator={true}>
+            {principles.map((principle, index) => (
+              <TouchableOpacity
+                key={principle.id}
+                className={`py-3 px-4 mb-2 flex-row items-center ${index < principles.length - 1 ? '' : ''}`}
+                style={{
+                  backgroundColor: isDark ? '#27272A' : '#E5E7EB',
+                  borderRadius: 5,
+                }}
+                onPress={() => {
+                  setSelectedPrincipleId(principle.id);
+                  setShowPrinciplePicker(false);
+                }}
+              >
+                <View className="flex-1">
+                  <Text className={`font-semibold mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                    {principle.title}
+                  </Text>
+                  {principle.description && (
+                    <Text className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-600'}`}>
+                      {principle.description}
+                    </Text>
+                  )}
+                </View>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         </View>
       )}
       <TextInput

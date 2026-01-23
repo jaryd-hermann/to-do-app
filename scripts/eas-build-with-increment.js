@@ -62,23 +62,46 @@ function hasUncommittedChanges() {
 
 function commitBuildNumber() {
   try {
-    // Check if app.json has changes
-    const result = execSync('git status --porcelain app.json ios/Mindjoy/Info.plist ios/Mindjoy.xcodeproj/project.pbxproj', {
+    // Determine which config file exists
+    const appConfigPath = path.join(__dirname, '..', 'app.config.js');
+    const appJsonPath = path.join(__dirname, '..', 'app.json');
+    const configFile = fs.existsSync(appConfigPath) ? 'app.config.js' : 
+                      fs.existsSync(appJsonPath) ? 'app.json' : null;
+    
+    if (!configFile) {
+      console.warn('⚠️  No config file found to read build numbers');
+      return;
+    }
+    
+    // Check if config files have changes
+    const filesToCheck = [configFile, 'ios/Mindjoy/Info.plist', 'ios/Mindjoy.xcodeproj/project.pbxproj'].join(' ');
+    const result = execSync(`git status --porcelain ${filesToCheck}`, {
       encoding: 'utf8',
       cwd: path.join(__dirname, '..')
     });
     
     if (result.trim().length > 0) {
       console.log('\n📝 Committing build number changes...\n');
-      execSync('git add app.json ios/Mindjoy/Info.plist ios/Mindjoy.xcodeproj/project.pbxproj', {
+      execSync(`git add ${filesToCheck}`, {
         stdio: 'inherit',
         cwd: path.join(__dirname, '..')
       });
       
-      // Read the new build number from app.json
-      const appJson = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'app.json'), 'utf8'));
-      const iosBuild = appJson.expo?.ios?.buildNumber || 'unknown';
-      const androidBuild = appJson.expo?.android?.versionCode || 'unknown';
+      // Read the new build number from config file
+      let iosBuild = 'unknown';
+      let androidBuild = 'unknown';
+      
+      if (configFile === 'app.config.js') {
+        delete require.cache[require.resolve(appConfigPath)];
+        const config = require(appConfigPath);
+        const expoConfig = config.expo || config;
+        iosBuild = expoConfig.ios?.buildNumber || 'unknown';
+        androidBuild = expoConfig.android?.versionCode || 'unknown';
+      } else {
+        const appJson = JSON.parse(fs.readFileSync(appJsonPath, 'utf8'));
+        iosBuild = appJson.expo?.ios?.buildNumber || 'unknown';
+        androidBuild = appJson.expo?.android?.versionCode || 'unknown';
+      }
       
       execSync(`git commit -m "chore: increment build numbers (iOS: ${iosBuild}, Android: ${androidBuild})"`, {
         stdio: 'inherit',

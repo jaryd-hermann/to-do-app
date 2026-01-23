@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, ScrollView, Alert, Image } from 'react-na
 import { router } from 'expo-router';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import * as Haptics from 'expo-haptics';
 import { usePrinciples, useSystemPrinciples } from '@/hooks/usePrinciples';
 import { Principle } from '@/types/models';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -18,7 +19,7 @@ export default function PrinciplesScreen() {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
-  const { principles, loading, createPrinciple, updatePrinciple, deletePrinciple, reorderPrinciples } =
+  const { principles, loading, createPrinciple, updatePrinciple, deletePrinciple, reorderPrinciples, refetch: refetchPrinciples } =
     usePrinciples();
   const { principles: systemPrinciples } = useSystemPrinciples();
 
@@ -56,6 +57,7 @@ export default function PrinciplesScreen() {
         onPress: async () => {
           try {
             await deletePrinciple(principle.id);
+            await refetchPrinciples();
           } catch (error: any) {
             Alert.alert('Error', error.message);
           }
@@ -68,6 +70,7 @@ export default function PrinciplesScreen() {
     try {
       // Use the createPrinciple directly since we have the principle object
       await createPrinciple(principle.title, principle.description || undefined);
+      await refetchPrinciples();
       Alert.alert('Success', 'Principle copied to your list');
     } catch (error: any) {
       Alert.alert('Error', error.message);
@@ -76,106 +79,105 @@ export default function PrinciplesScreen() {
 
   const renderPrinciple = ({ item, drag, isActive }: RenderItemParams<Principle>) => {
     const isTopRanked = item.position === 0;
+    
+    const handleLongPress = () => {
+      // Silently ignore haptics errors - they don't affect functionality
+      try {
+        if (typeof Haptics !== 'undefined' && Haptics?.impactAsync) {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+        }
+      } catch (e) {
+        // Haptics not available, continue anyway
+      }
+      if (drag) {
+        drag();
+      }
+    };
+    
     return (
-    <View
-      className={`rounded-2xl p-4 mb-3 ${isDark ? '' : 'bg-gray-100'}`}
-      style={isDark ? { backgroundColor: '#000000', borderWidth: isTopRanked ? 1 : 0, borderColor: isTopRanked ? '#FFFFFF' : 'transparent' } : undefined}
-    >
-      <View className="flex-row items-start">
-        <TouchableOpacity onLongPress={drag} disabled={isActive} className="mr-3">
-          <Ionicons
-            name="reorder-three-outline"
-            size={24}
-            color={isDark ? '#9CA3AF' : '#6B7280'}
-          />
-        </TouchableOpacity>
-        <View className="flex-1">
-          <Text className={`text-lg font-bold mb-1 ${isDark ? 'text-white' : 'text-black'}`}>
-            {item.title}
-          </Text>
-          {item.description && (
-            <Text className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-              {item.description}
+      <TouchableOpacity
+        className={`rounded-2xl p-4 mb-3 ${isDark ? '' : 'bg-gray-100'}`}
+        style={isDark ? { 
+          backgroundColor: '#000000', 
+          borderWidth: isTopRanked ? 1 : (isActive ? 2 : 1),
+          borderColor: isTopRanked ? '#FFFFFF' : (isActive ? '#FFFFFF' : '#27272A'),
+          opacity: isActive ? 0.8 : 1,
+        } : {
+          borderWidth: isTopRanked ? 1 : (isActive ? 2 : 1),
+          borderColor: isTopRanked ? '#000000' : (isActive ? '#000000' : '#E5E7EB'),
+          opacity: isActive ? 0.8 : 1,
+        }}
+        onPress={() => {
+          setEditingPrinciple(item);
+          setShowPrincipleForm(true);
+        }}
+        onLongPress={handleLongPress}
+        disabled={isActive}
+      >
+        <View className="flex-row items-start">
+          <View className="flex-1">
+            {isTopRanked && (
+              <Text className={`text-xs font-semibold mb-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                THIS IS YOUR MAIN PRINCIPLE
+              </Text>
+            )}
+            <Text className={`text-lg font-bold mb-1 ${isDark ? 'text-white' : 'text-black'}`}>
+              {item.title}
             </Text>
-          )}
+            {item.description && (
+              <Text className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                {item.description}
+              </Text>
+            )}
+          </View>
         </View>
-        <TouchableOpacity
-          onPress={() => {
-            setEditingPrinciple(item);
-            setShowPrincipleForm(true);
-          }}
-          className="mr-3"
-        >
-          <Text className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Edit</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => handleDelete(item)}>
-          <Ionicons name="trash-outline" size={20} color={isDark ? '#9CA3AF' : '#6B7280'} />
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+      </TouchableOpacity>
+    );
   };
 
-  return (
-    <View className={`flex-1 ${isDark ? 'bg-black' : 'bg-white'}`}>
-      <ScrollView className="flex-1 px-6">
-        {/* Header */}
-        <View className="pt-20 pb-4">
-          <Text className={`text-3xl font-bold mb-4 ${isDark ? 'text-white' : 'text-black'}`}>
-            My Principles
-          </Text>
-        </View>
-
-        {/* My Principles Section */}
-        <View className="flex-row items-center justify-between mb-8">
-          <TouchableOpacity
-            className={`px-4 py-2 rounded-xl border ${isDark ? 'bg-white border-white' : 'bg-black border-black'}`}
-            onPress={() => {
-              setEditingPrinciple(null);
-              setShowPrincipleForm(true);
-            }}
-          >
-            <View className="flex-row items-center">
-              <Ionicons name="add" size={20} color={isDark ? '#000000' : '#FFFFFF'} />
-              <Text className={`ml-1 font-semibold ${isDark ? 'text-black' : 'text-white'}`}>
-                Add
-              </Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-
-        {principles.length === 0 ? (
-          <>
-            <Text className={`text-center py-8 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-              No principles yet. Add your first one!
+  const ListHeaderComponent = () => (
+    <>
+      {/* Header */}
+      <View className="pt-20 pb-4 flex-row items-center justify-between">
+        <Text className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-black'}`}>
+          My Principles
+        </Text>
+        <TouchableOpacity
+          className={`px-4 py-2 rounded-xl border ${isDark ? 'bg-white border-white' : 'bg-black border-black'}`}
+          onPress={() => {
+            setEditingPrinciple(null);
+            setShowPrincipleForm(true);
+          }}
+        >
+          <View className="flex-row items-center">
+            <Ionicons name="add" size={20} color={isDark ? '#000000' : '#FFFFFF'} />
+            <Text className={`ml-1 font-semibold ${isDark ? 'text-black' : 'text-white'}`}>
+              Add
             </Text>
-            
-            {/* Marketing Carousel */}
-            <MarketingCarousel cards={marketingCards} hideSeen={true} />
-          </>
-        ) : (
-          <>
-            <View className="mb-6 mt-6">
-              <GestureHandlerRootView>
-                <DraggableFlatList
-                  data={principles}
-                  onDragEnd={({ data }) => reorderPrinciples(data)}
-                  keyExtractor={(item) => item.id}
-                  renderItem={renderPrinciple}
-                  scrollEnabled={false}
-                />
-              </GestureHandlerRootView>
-            </View>
-            
-            {/* Marketing Carousel - Always show below principles */}
-            <MarketingCarousel cards={marketingCards} hideSeen={true} />
-          </>
-        )}
+          </View>
+        </TouchableOpacity>
+      </View>
 
-        {/* Inspiration Section */}
+      {/* Spacer */}
+      <View className="mb-8" />
+    </>
+  );
+
+  const ListFooterComponent = () => (
+    <>
+      {/* Marketing Carousel */}
+      {principles.length > 0 && (
+        <View className="mb-6">
+          <MarketingCarousel cards={marketingCards} hideSeen={true} />
+        </View>
+      )}
+
+      {/* Inspiration Section */}
+      <View>
         <TouchableOpacity
           className="flex-row items-center justify-between mt-8 mb-4"
           onPress={() => setShowInspiration(!showInspiration)}
+          style={!showInspiration ? { marginBottom: 32 } : undefined}
         >
           <Text className={`text-xl font-bold ${isDark ? 'text-white' : 'text-black'}`}>
             Inspiration
@@ -188,7 +190,7 @@ export default function PrinciplesScreen() {
         </TouchableOpacity>
 
         {showInspiration && (
-          <View>
+          <View className="mb-16">
             {systemPrinciples.length === 0 ? (
               <Text className={`text-center py-4 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
                 No inspiration principles available
@@ -230,7 +232,36 @@ export default function PrinciplesScreen() {
             )}
           </View>
         )}
-      </ScrollView>
+      </View>
+    </>
+  );
+
+  return (
+    <View className={`flex-1 ${isDark ? 'bg-black' : 'bg-white'}`}>
+      {principles.length === 0 ? (
+        <ScrollView className="flex-1" contentContainerStyle={{ paddingHorizontal: 24 }}>
+          <ListHeaderComponent />
+          <Text className={`text-center py-8 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+            No principles yet. Add your first one!
+          </Text>
+          <View>
+            <MarketingCarousel cards={marketingCards} hideSeen={true} />
+          </View>
+          <ListFooterComponent />
+        </ScrollView>
+      ) : (
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <DraggableFlatList
+            data={principles}
+            onDragEnd={({ data }) => reorderPrinciples(data)}
+            keyExtractor={(item) => item.id}
+            renderItem={renderPrinciple}
+            ListHeaderComponent={ListHeaderComponent}
+            ListFooterComponent={ListFooterComponent}
+            contentContainerStyle={{ paddingHorizontal: 24 }}
+          />
+        </GestureHandlerRootView>
+      )}
 
       {/* Principle Form Modal */}
       <PrincipleForm
@@ -239,7 +270,28 @@ export default function PrinciplesScreen() {
           setShowPrincipleForm(false);
           setEditingPrinciple(null);
         }}
-        onSubmit={editingPrinciple ? updatePrinciple : createPrinciple}
+        onSubmit={async (title: string, description?: string) => {
+          try {
+            if (editingPrinciple) {
+              await updatePrinciple(editingPrinciple.id, { title, description });
+            } else {
+              await createPrinciple(title, description);
+            }
+            await refetchPrinciples();
+          } catch (error: any) {
+            Alert.alert('Error', error.message);
+            throw error; // Re-throw to let form handle it
+          }
+        }}
+        onDelete={editingPrinciple ? async (principleId: string) => {
+          try {
+            await deletePrinciple(principleId);
+            await refetchPrinciples();
+          } catch (error: any) {
+            Alert.alert('Error', error.message);
+            throw error;
+          }
+        } : undefined}
         principle={editingPrinciple}
       />
     </View>
@@ -250,11 +302,13 @@ function PrincipleForm({
   visible,
   onClose,
   onSubmit,
+  onDelete,
   principle,
 }: {
   visible: boolean;
   onClose: () => void;
   onSubmit: (title: string, description?: string) => Promise<void>;
+  onDelete?: (principleId: string) => Promise<void>;
   principle?: Principle | null;
 }) {
   const [title, setTitle] = useState('');
@@ -287,11 +341,41 @@ function PrincipleForm({
     }
   };
 
+  const handleDelete = () => {
+    if (!principle || !onDelete) return;
+    Alert.alert('Delete Principle', 'Are you sure?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await onDelete(principle.id);
+            onClose();
+          } catch (error: any) {
+            Alert.alert('Error', error.message);
+          }
+        },
+      },
+    ]);
+  };
+
   return (
-    <BottomSheet visible={visible} onClose={onClose} title={principle ? 'Edit Principle' : 'New Principle'}>
+    <BottomSheet visible={visible} onClose={onClose} title={principle ? 'Edit Principle' : 'New Principle'} onDelete={principle ? handleDelete : undefined}>
       <TextInput
-        className={`py-4 px-4 rounded-2xl mb-4 ${isDark ? '' : 'bg-gray-100'}`}
-        style={isDark ? { backgroundColor: '#18181B', color: '#FFFFFF' } : { color: '#000000' }}
+        className={`px-4 rounded-2xl mb-4 ${isDark ? '' : 'bg-gray-100'}`}
+        style={isDark ? { 
+          backgroundColor: '#18181B', 
+          color: '#FFFFFF', 
+          height: 56,
+          textAlignVertical: 'center',
+          paddingVertical: 16,
+        } : { 
+          color: '#000000', 
+          height: 56,
+          textAlignVertical: 'center',
+          paddingVertical: 16,
+        }}
         placeholder="Title"
         placeholderTextColor={isDark ? '#9CA3AF' : '#6B7280'}
         value={title}

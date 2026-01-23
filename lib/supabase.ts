@@ -1,39 +1,105 @@
 import 'react-native-url-polyfill/auto';
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 
-// Get environment variables from process.env
-// In EAS builds, these come from secrets configured in EAS dashboard
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+// Get environment variables from multiple sources
+// In development: from process.env (via .env file or Metro bundler)
+// In production EAS builds: from Constants.expoConfig.extra (via EAS secrets)
+// Fallback to process.env for compatibility
+function getEnvVar(key: string): string {
+  // Try Constants.expoConfig.extra first (for production EAS builds)
+  if (Constants.expoConfig?.extra?.[key]) {
+    return Constants.expoConfig.extra[key] as string;
+  }
+  // Try process.env (for development and EAS builds where EXPO_PUBLIC_ vars are injected)
+  if (process.env[key]) {
+    return process.env[key];
+  }
+  // Last resort: check Constants.expoConfig.extra.eas.build.env (if EAS injected it there)
+  if (Constants.expoConfig?.extra?.eas?.build?.env?.[key]) {
+    return Constants.expoConfig.extra.eas.build.env[key] as string;
+  }
+  return '';
+}
+
+const supabaseUrl = getEnvVar('EXPO_PUBLIC_SUPABASE_URL');
+const supabaseAnonKey = getEnvVar('EXPO_PUBLIC_SUPABASE_ANON_KEY');
 
 // Log configuration (without exposing keys in production)
+// ALWAYS log in production to debug device issues
+const hasUrl = !!supabaseUrl;
+const hasKey = !!supabaseAnonKey;
+const urlSource = Constants.expoConfig?.extra?.EXPO_PUBLIC_SUPABASE_URL ? 'Constants.expoConfig.extra' : (process.env.EXPO_PUBLIC_SUPABASE_URL ? 'process.env' : 'MISSING');
+const keySource = Constants.expoConfig?.extra?.EXPO_PUBLIC_SUPABASE_ANON_KEY ? 'Constants.expoConfig.extra' : (process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ? 'process.env' : 'MISSING');
+
+// CRITICAL: Always log this in production to debug device issues
+console.log('[SUPABASE INIT] Starting Supabase initialization...');
+console.log('[SUPABASE INIT] URL present:', hasUrl, '| Source:', urlSource);
+console.log('[SUPABASE INIT] Key present:', hasKey, '| Source:', keySource);
+if (hasUrl) {
+  console.log('[SUPABASE INIT] URL (first 50):', supabaseUrl.substring(0, 50));
+  console.log('[SUPABASE INIT] URL length:', supabaseUrl.length);
+  try {
+    const testUrl = new URL(supabaseUrl);
+    console.log('[SUPABASE INIT] URL hostname:', testUrl.hostname);
+  } catch (e: any) {
+    console.error('[SUPABASE INIT] URL parse error:', e.message);
+    console.error('[SUPABASE INIT] Invalid URL value:', supabaseUrl);
+  }
+} else {
+  console.error('[SUPABASE INIT] CRITICAL: URL is MISSING!');
+  console.error('[SUPABASE INIT] Constants.expoConfig?.extra keys:', Object.keys(Constants.expoConfig?.extra || {}));
+}
+
 if (__DEV__) {
-  if (supabaseUrl) {
+  if (hasUrl) {
     console.log('Supabase URL configured:', supabaseUrl.substring(0, 30) + '...');
     console.log('Full Supabase URL:', supabaseUrl);
+    console.log('URL source:', urlSource);
   } else {
     console.warn('⚠️  Supabase URL is missing!');
+    console.warn('   Checked:', urlSource);
   }
-  if (supabaseAnonKey) {
+  if (hasKey) {
     console.log('Supabase Key configured: YES');
     console.log('Key length:', supabaseAnonKey.length);
+    console.log('Key source:', keySource);
   } else {
     console.warn('⚠️  Supabase Key is missing!');
+    console.warn('   Checked:', keySource);
   }
 } else {
   // In production, log warnings if credentials are missing
-  if (!supabaseUrl || !supabaseAnonKey) {
+  if (!hasUrl || !hasKey) {
     console.error('⚠️  CRITICAL: Supabase credentials are missing in production build!');
+    console.error('   URL present:', hasUrl, '(from', urlSource + ')');
+    console.error('   Key present:', hasKey, '(from', keySource + ')');
     console.error('   Make sure EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY are set in EAS secrets');
+    console.error('   Constants.expoConfig?.extra keys:', JSON.stringify(Object.keys(Constants.expoConfig?.extra || {})));
+    console.error('   process.env.EXPO_PUBLIC_SUPABASE_URL:', process.env.EXPO_PUBLIC_SUPABASE_URL ? 'SET' : 'MISSING');
+    console.error('   process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY:', process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ? 'SET' : 'MISSING');
   } else {
     // Log that credentials are present (without exposing them)
     console.log('✅ Supabase credentials loaded in production');
-    console.log('   URL length:', supabaseUrl.length);
-    console.log('   Key length:', supabaseAnonKey.length);
+    console.log('   URL length:', supabaseUrl.length, '(from', urlSource + ')');
+    console.log('   URL (first 50 chars):', supabaseUrl.substring(0, 50));
+    console.log('   Key length:', supabaseAnonKey.length, '(from', keySource + ')');
     // Validate URL format
     if (!supabaseUrl.startsWith('https://')) {
       console.error('⚠️  WARNING: Supabase URL does not start with https://');
+      console.error('   Actual URL:', supabaseUrl);
+    } else {
+      console.log('   URL format: Valid HTTPS URL');
+      // Try to parse URL to verify it's valid
+      try {
+        const testUrl = new URL(supabaseUrl);
+        console.log('   URL hostname:', testUrl.hostname);
+        console.log('   URL protocol:', testUrl.protocol);
+      } catch (urlError: any) {
+        console.error('⚠️  WARNING: Supabase URL is not a valid URL:', urlError.message);
+        console.error('   URL value:', supabaseUrl);
+      }
     }
   }
 }
@@ -84,6 +150,14 @@ function getSupabaseClient() {
   }
 
   try {
+    // Validate URL format before creating client
+    if (!supabaseUrl.startsWith('https://')) {
+      throw new Error(`Invalid Supabase URL format: ${supabaseUrl}. Must start with https://`);
+    }
+    
+    // Log the actual URL being used (for debugging)
+    console.log('Creating Supabase client with URL:', supabaseUrl);
+    
     // Create client with AsyncStorage adapter
     // AsyncStorage is recommended for React Native as it doesn't have size limitations
     supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
@@ -96,6 +170,20 @@ function getSupabaseClient() {
       global: {
         headers: {
           'x-client-info': 'mindjoy-app',
+        },
+        // Add custom fetch to log network errors
+        fetch: (url, options = {}) => {
+          const urlString = typeof url === 'string' ? url : url.toString();
+          console.log('Supabase fetch request:', urlString.substring(0, 100));
+          return fetch(url, options).catch((error) => {
+            console.error('Supabase fetch error:', {
+              url: urlString.substring(0, 100),
+              error: error.message,
+              code: (error as any).code,
+              domain: (error as any).domain,
+            });
+            throw error;
+          });
         },
       },
     });
@@ -190,4 +278,43 @@ export const supabase = createSupabaseInstance();
 if (!supabase || !supabase.auth) {
   console.error('⚠️  CRITICAL: Exported supabase client is invalid!');
   console.error('   This should never happen - please check Supabase initialization');
+}
+
+// Diagnostic function for testing (available in dev mode)
+if (__DEV__) {
+  (global as any).testSupabaseConnection = async () => {
+    console.log('=== Supabase Connection Test ===');
+    console.log('URL:', supabaseUrl || 'MISSING');
+    console.log('Key present:', !!supabaseAnonKey);
+    console.log('Key length:', supabaseAnonKey?.length || 0);
+    console.log('URL source:', urlSource);
+    console.log('Key source:', keySource);
+    console.log('Constants.expoConfig?.extra keys:', Object.keys(Constants.expoConfig?.extra || {}));
+    
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.error('❌ Credentials missing - cannot test connection');
+      return;
+    }
+    
+    try {
+      // Test 1: Health check
+      console.log('\n1. Testing health endpoint...');
+      const healthResponse = await fetch(`${supabaseUrl}/auth/v1/health`);
+      const healthData = await healthResponse.json();
+      console.log('✅ Health check:', healthData);
+    } catch (error: any) {
+      console.error('❌ Health check failed:', error.message);
+    }
+    
+    try {
+      // Test 2: Session check
+      console.log('\n2. Testing session retrieval...');
+      const { data, error } = await supabase.auth.getSession();
+      console.log('✅ Session check:', { hasData: !!data, hasError: !!error, error: error?.message });
+    } catch (error: any) {
+      console.error('❌ Session check failed:', error.message);
+    }
+    
+    console.log('\n=== Test Complete ===');
+  };
 }

@@ -104,8 +104,16 @@ export default function ScribblesScreen() {
           <Text className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-black'}`}>
             Scribbles
           </Text>
-          <TouchableOpacity onPress={handleCreateNote}>
-            <Ionicons name="create-outline" size={24} color={isDark ? '#FFFFFF' : '#000000'} />
+          <TouchableOpacity
+            className={`px-4 py-2 rounded-xl border ${isDark ? 'bg-white border-white' : 'bg-black border-black'}`}
+            onPress={handleCreateNote}
+          >
+            <View className="flex-row items-center">
+              <Ionicons name="add" size={20} color={isDark ? '#000000' : '#FFFFFF'} />
+              <Text className={`ml-1 font-semibold ${isDark ? 'text-black' : 'text-white'}`}>
+                Add
+              </Text>
+            </View>
           </TouchableOpacity>
         </View>
         <Text className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
@@ -140,7 +148,31 @@ export default function ScribblesScreen() {
       ) : (
         <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
           {renderSection('Pinned', sections.pinned, true, true)}
-          {renderSection('Today', sections.today)}
+          {sections.today.length === 0 ? (
+            <View className="mb-6 px-6">
+              <Text className={`text-lg font-bold mb-3 ${isDark ? 'text-white' : 'text-black'}`}>
+                Today
+              </Text>
+              <TouchableOpacity
+                onPress={() => handleOpenDailyScribble(format(new Date(), 'yyyy-MM-dd'))}
+                className={`flex-row items-center justify-center py-4 rounded-2xl ${
+                  isDark ? '' : 'bg-gray-100'
+                }`}
+                style={isDark ? { backgroundColor: '#18181B' } : undefined}
+              >
+                <Ionicons
+                  name="add"
+                  size={24}
+                  color={isDark ? '#FFFFFF' : '#000000'}
+                />
+                <Text className={`ml-2 font-semibold ${isDark ? 'text-white' : 'text-black'}`}>
+                  Add a daily scribble
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            renderSection('Today', sections.today)
+          )}
           {renderSection('Yesterday', sections.yesterday)}
           {renderSection('Previous 30 Days', sections.previous30Days)}
           {renderSection('Older', sections.older)}

@@ -24,10 +24,18 @@ export function useSeenStories() {
 
   const markStoryAsSeen = async (storyId: string) => {
     try {
-      const updated = new Set(seenStories);
-      updated.add(storyId);
-      setSeenStories(updated);
-      await AsyncStorage.setItem(SEEN_STORIES_KEY, JSON.stringify(Array.from(updated)));
+      // Use functional update to avoid stale closure issues and race conditions
+      setSeenStories((prev) => {
+        const updated = new Set(prev);
+        updated.add(storyId);
+        // Convert to array immediately while Set is stable, before any async operations
+        const arrayToSave = Array.from(updated);
+        // Save to AsyncStorage asynchronously (don't await to avoid blocking state update)
+        AsyncStorage.setItem(SEEN_STORIES_KEY, JSON.stringify(arrayToSave)).catch((error) => {
+          console.error('Error saving seen stories to storage:', error);
+        });
+        return updated;
+      });
     } catch (error) {
       console.error('Error marking story as seen:', error);
     }

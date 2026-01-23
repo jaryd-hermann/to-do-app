@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Principle } from '@/types/models';
@@ -8,12 +8,7 @@ export function usePrinciples() {
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
 
-  useEffect(() => {
-    if (!user) return;
-    fetchPrinciples();
-  }, [user]);
-
-  const fetchPrinciples = async () => {
+  const fetchPrinciples = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -31,7 +26,12 @@ export function usePrinciples() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    fetchPrinciples();
+  }, [user, fetchPrinciples]);
 
   const createPrinciple = async (title: string, description?: string): Promise<Principle> => {
     if (!user) throw new Error('User not authenticated');

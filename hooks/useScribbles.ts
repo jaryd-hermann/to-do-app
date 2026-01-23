@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Scribble } from '@/types/models';
@@ -9,12 +9,7 @@ export function useScribbles() {
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
 
-  useEffect(() => {
-    if (!user) return;
-    fetchScribbles();
-  }, [user]);
-
-  const fetchScribbles = async () => {
+  const fetchScribbles = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -32,7 +27,12 @@ export function useScribbles() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    fetchScribbles();
+  }, [user, fetchScribbles]);
 
   const createScribble = async (
     title: string,

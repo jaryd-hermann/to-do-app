@@ -18,7 +18,7 @@ export function DailyHabitsSection({ date }: DailyHabitsSectionProps) {
   }
 
   return (
-    <View className="mb-6 px-6">
+    <View className="mb-6">
       <Text className={`text-sm font-semibold mb-3 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
         things you're trying to do daily
       </Text>

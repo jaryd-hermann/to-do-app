@@ -41,9 +41,25 @@ export default function Index() {
     return <Redirect href="/(auth)/welcome" />;
   }
 
-  if (subscriptionStatus === 'expired') {
-    return <Redirect href="/(auth)/paywall" />;
+  // Wait for subscription status to be checked before redirecting
+  // If still loading subscription status, show loading screen
+  if (loading && user) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#000000', alignItems: 'center', justifyContent: 'center' }}>
+        <Image
+          source={require('../assets/icon.png')}
+          style={{ width: 96, height: 96, marginBottom: 16 }}
+          resizeMode="contain"
+        />
+        <ActivityIndicator size="small" color="#FFFFFF" />
+      </View>
+    );
   }
 
+  // Always redirect to today screen - never auto-redirect to paywall
+  // Paywall is only accessible via:
+  // 1. Onboarding flow (from about.tsx)
+  // 2. Settings page subscription section
+  // 3. Expired subscription banner on Today page
   return <Redirect href="/(tabs)/today" />;
 }
